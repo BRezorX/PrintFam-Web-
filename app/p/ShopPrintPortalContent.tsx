@@ -2,19 +2,20 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import AppShell from '../../../components/AppShell';
-import FileUploader from '../../../components/FileUploader';
-import PdfPreviewer from '../../../components/PdfPreviewer';
-import PrintSettings from '../../../components/PrintSettings';
-import PriceBreakdown from '../../../components/PriceBreakdown';
-import PaymentPanel from '../../../components/PaymentPanel';
-import { getShopDetails, createPrintJob } from '../../../services/api';
+import { useRouter, useSearchParams } from 'next/navigation';
+import AppShell from '../../components/AppShell';
+import FileUploader from '../../components/FileUploader';
+import PdfPreviewer from '../../components/PdfPreviewer';
+import PrintSettings from '../../components/PrintSettings';
+import PriceBreakdown from '../../components/PriceBreakdown';
+import PaymentPanel from '../../components/PaymentPanel';
+import { getShopDetails, createPrintJob } from '../../services/api';
 import { ArrowLeft, ArrowRight, FileText, AlertTriangle } from 'lucide-react';
 
-export default function ShopPrintPortalClient({ params }: { params: { shopId: string } }) {
+export default function ShopPrintPortalContent() {
   const router = useRouter();
-  const shopId = params.shopId;
+  const searchParams = useSearchParams();
+  const shopId = searchParams.get('shopId');
 
   // Shop details session state
   const [shopSettings, setShopSettings] = useState<any>(null);
@@ -40,7 +41,11 @@ export default function ShopPrintPortalClient({ params }: { params: { shopId: st
 
   // Fetch shop settings on mount
   useEffect(() => {
-    if (!shopId || shopId === 'default') return;
+    if (!shopId) {
+      setError("No Shop ID provided in the URL. Please scan the QR code again.");
+      setLoading(false);
+      return;
+    }
 
     const fetchShopInfo = async () => {
       try {
@@ -128,8 +133,8 @@ export default function ShopPrintPortalClient({ params }: { params: { shopId: st
       sessionStorage.setItem('last_job_id', docInfo.jobId);
       sessionStorage.setItem('last_job_name', docInfo.fileName);
       
-      // Route to Status tracking page
-      router.push(`/status/${docInfo.jobId}`);
+      // Route to Status tracking page using query param
+      router.push(`/status?jobId=${docInfo.jobId}`);
     } catch (err) {
       console.error("Job submit failed", err);
       alert("Failed to submit job to queue. Contact counter.");

@@ -2,14 +2,15 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import AppShell from '../../../components/AppShell';
-import { subscribeToJobStatus } from '../../../services/api';
+import { useRouter, useSearchParams } from 'next/navigation';
+import AppShell from '../../components/AppShell';
+import { subscribeToJobStatus } from '../../services/api';
 import { Loader2, CheckCircle2, AlertOctagon, Printer, FileCheck2, ArrowRight } from 'lucide-react';
 
-export default function JobStatusClient({ params }: { params: { jobId: string } }) {
+export default function JobStatusContent() {
   const router = useRouter();
-  const jobId = params.jobId;
+  const searchParams = useSearchParams();
+  const jobId = searchParams.get('jobId');
 
   const [job, setJob] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -24,7 +25,11 @@ export default function JobStatusClient({ params }: { params: { jobId: string } 
   }, []);
 
   useEffect(() => {
-    if (!jobId || jobId === 'default') return;
+    if (!jobId) {
+      setError("No Job ID provided in the URL.");
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     setError('');
@@ -51,7 +56,7 @@ export default function JobStatusClient({ params }: { params: { jobId: string } 
 
     const shopId = job?.user_id || sessionStorage.getItem('current_shop_id');
     if (shopId) {
-      router.push(`/p/${shopId}`);
+      router.push(`/p?shopId=${shopId}`);
     } else {
       router.push('/');
     }
