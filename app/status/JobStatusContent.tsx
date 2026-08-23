@@ -10,7 +10,7 @@ import { Loader2, CheckCircle2, AlertOctagon, Printer, FileCheck2, ArrowRight } 
 export default function JobStatusContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const jobId = searchParams.get('jobId');
+  const jobId = searchParams.get('jobId') || searchParams.get('jobid');
 
   const [job, setJob] = useState<any>(null);
   const [loading, setLoading] = useState(true);

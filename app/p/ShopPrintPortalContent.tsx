@@ -15,7 +15,7 @@ import { ArrowLeft, ArrowRight, FileText, AlertTriangle } from 'lucide-react';
 export default function ShopPrintPortalContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const shopId = searchParams.get('shopId');
+  const shopId = searchParams.get('shopId') || searchParams.get('shopid');
 
   // Shop details session state
   const [shopSettings, setShopSettings] = useState<any>(null);
