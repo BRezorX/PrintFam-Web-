@@ -10,6 +10,13 @@ export default function PdfPreviewer({ file, selectedPages, onSelectionChange })
   const [rangeError, setRangeError] = useState('');
   const [loading, setLoading] = useState(true);
 
+  // Check if PDF.js is already loaded in the window on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.pdfjsLib) {
+      setPdfjsLoaded(true);
+    }
+  }, []);
+
   // Initialize PDF.js once the script is loaded
   useEffect(() => {
     if (!pdfjsLoaded || !file) return;
