@@ -262,8 +262,8 @@ export default function JobStatusContent() {
                 onClick={handleDone}
                 className={`w-full text-white font-extrabold text-sm py-4 rounded-2xl shadow-md transition flex items-center justify-center space-x-1 ${
                   areAllJobsFinished() 
-                    ? 'bg-green-650 hover:bg-green-700 active:bg-green-800' 
-                    : 'bg-gray-500 hover:bg-gray-650 active:bg-gray-700'
+                    ? 'bg-green-600 hover:bg-green-700 active:bg-green-800' 
+                    : 'bg-gray-500 hover:bg-gray-600 active:bg-gray-700'
                 }`}
               >
                 <span>{areAllJobsFinished() ? 'Done' : 'Go Back to Shop'}</span>

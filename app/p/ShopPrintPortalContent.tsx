@@ -405,7 +405,7 @@ export default function ShopPrintPortalContent() {
                         <div className="flex justify-between items-center text-xs">
                           <span className="font-bold text-gray-700 truncate max-w-[75%]">{task.fileName}</span>
                           {task.status === 'uploading' && (
-                            <span className="text-blue-650 font-black animate-pulse">{task.progress}%</span>
+                            <span className="text-blue-600 font-black animate-pulse">{task.progress}%</span>
                           )}
                           {task.status === 'success' && (
                             <span className="text-green-600 font-black flex items-center space-x-0.5">
@@ -467,7 +467,7 @@ export default function ShopPrintPortalContent() {
                     <button
                       disabled={uploadTasks.some(t => t.status === 'uploading')}
                       onClick={() => setStep(2)}
-                      className="w-full bg-blue-650 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-extrabold text-sm py-4 rounded-2xl shadow-md transition flex items-center justify-center space-x-1"
+                      className="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-extrabold text-sm py-4 rounded-2xl shadow-md transition flex items-center justify-center space-x-1"
                     >
                       <span>Next: Configure Prints</span>
                       <ArrowRight className="w-4 h-4" />
@@ -512,7 +512,7 @@ export default function ShopPrintPortalContent() {
                       </div>
 
                       {/* Control Panel Settings */}
-                      <div className="grid grid-cols-2 gap-4 border-t border-gray-100 pt-4 text-xs font-semibold text-gray-650">
+                      <div className="grid grid-cols-2 gap-4 border-t border-gray-100 pt-4 text-xs font-semibold text-gray-600">
                         {/* Color mode */}
                         <div>
                           <span className="block text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">Color Option</span>
