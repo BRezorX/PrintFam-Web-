@@ -41,10 +41,14 @@ export default function PdfPreviewer({ file, selectedPages, onSelectionChange })
             setNumPages(doc.numPages);
             setLoading(false);
 
-            // Default: Select all pages
-            const allPages = Array.from({ length: doc.numPages }, (_, i) => i + 1);
-            onSelectionChange(allPages);
-            setRangeInput(formatPageRange(allPages));
+            // Default: Select all pages only if no previous selection exists
+            if (selectedPages && selectedPages.length > 0) {
+              setRangeInput(formatPageRange(selectedPages));
+            } else {
+              const allPages = Array.from({ length: doc.numPages }, (_, i) => i + 1);
+              onSelectionChange(allPages);
+              setRangeInput(formatPageRange(allPages));
+            }
           } catch (err) {
             console.error("Error parsing PDF document data", err);
             setRangeError("Could not render document previews.");
