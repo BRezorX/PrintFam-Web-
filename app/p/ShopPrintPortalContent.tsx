@@ -267,7 +267,9 @@ export default function ShopPrintPortalContent() {
           copies: file.printOptions.copies,
           color: file.printOptions.colorMode === 'color',
           duplex: file.printOptions.duplex,
-          status: 'pending'
+          status: 'pending',
+          pages: file.selectedPages.length,
+          amount: getFileEstimatedPrice(file)
         };
         return createPrintJob(jobPayload);
       });
