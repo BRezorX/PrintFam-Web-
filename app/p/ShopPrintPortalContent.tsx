@@ -1,15 +1,14 @@
 'use strict';
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Script from 'next/script';
 import AppShell from '../../components/AppShell';
-import FileUploader from '../../components/FileUploader';
 import PdfPreviewer from '../../components/PdfPreviewer';
 import PaymentPanel from '../../components/PaymentPanel';
-import { getShopDetails, createPrintJob } from '../../services/api';
-import { ArrowLeft, ArrowRight, FileText, AlertTriangle, Trash2, Sliders, CheckCircle, Plus } from 'lucide-react';
+import { getShopDetails, createPrintJob, uploadPrintFile } from '../../services/api';
+import { ArrowLeft, ArrowRight, FileText, AlertTriangle, Trash2, Sliders, UploadCloud, Loader2, CheckCircle2 } from 'lucide-react';
 
 interface UploadedFileEntry {
   id: string;
@@ -28,24 +27,34 @@ interface UploadedFileEntry {
   };
 }
 
+interface UploadTask {
+  id: string;
+  fileName: string;
+  progress: number;
+  status: 'uploading' | 'success' | 'error';
+  errorMsg?: string;
+}
+
 export default function ShopPrintPortalContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const shopId = searchParams.get('shopId') || searchParams.get('shopid');
 
-  // Shop details state
+  // Shop settings state
   const [shopSettings, setShopSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
-  // Script loaded state for PDF.js page parser
+  // PDF.js script loading status
   const [pdfjsLoaded, setPdfjsLoaded] = useState(false);
 
-  // Flow State
-  // Step 1: Upload & Configure list, Step 2: Pay & Checkout
+  // Wizard state: 1: Upload, 2: Configure, 3: Checkout/Pay
   const [step, setStep] = useState(1);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFileEntry[]>([]);
+  const [uploadTasks, setUploadTasks] = useState<UploadTask[]>([]);
   const [activePreviewIdx, setActivePreviewIdx] = useState<number | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch shop settings on mount
   useEffect(() => {
@@ -116,33 +125,96 @@ export default function ShopPrintPortalContent() {
     });
   };
 
-  // Upload Handlers
-  const handleUploadComplete = async (fileObject: File, data: any) => {
-    try {
-      const totalPages = await getPdfPageCount(fileObject);
-      const allPages = Array.from({ length: totalPages }, (_, i) => i + 1);
+  // Process selected files
+  const processFiles = async (files: FileList) => {
+    const activeShopId = shopSettings?.user_id;
+    if (!activeShopId) return;
 
-      const newEntry: UploadedFileEntry = {
-        id: data.jobId,
-        fileObject,
-        fileName: data.fileName,
-        fileUrl: data.fileUrl,
-        fileSize: data.fileSize,
-        totalPages,
-        selectedPages: allPages,
-        printOptions: {
-          paperSize: 'A4',
-          colorMode: 'bw', // Default: B&W (cheap)
-          orientation: 'portrait',
-          duplex: false,
-          copies: 1
-        }
-      };
+    const filesArray = Array.from(files);
+    
+    for (const file of filesArray) {
+      // Validate format
+      if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+        alert(`"${file.name}" is not a PDF file. Only PDF files are supported.`);
+        continue;
+      }
+      
+      // Validate size: 25MB limit
+      if (file.size > 25 * 1024 * 1024) {
+        alert(`"${file.name}" exceeds the 25MB file size limit.`);
+        continue;
+      }
 
-      setUploadedFiles(prev => [...prev, newEntry]);
-    } catch (err) {
-      console.error("PDF Parsing failed", err);
-      alert("Failed to read the structure of the uploaded PDF file. Make sure it isn't corrupted or password-protected.");
+      const tempId = 'upload_' + Math.random().toString(36).substr(2, 9);
+      
+      // Append upload task to state queue
+      setUploadTasks(prev => [...prev, {
+        id: tempId,
+        fileName: file.name,
+        progress: 15,
+        status: 'uploading'
+      }]);
+
+      try {
+        // Upload to storage bucket
+        const metadata = await uploadPrintFile(activeShopId, file);
+        setUploadTasks(prev => prev.map(t => t.id === tempId ? { ...t, progress: 60 } : t));
+        
+        // Count PDF pages
+        const totalPages = await getPdfPageCount(file);
+        const allPages = Array.from({ length: totalPages }, (_, i) => i + 1);
+
+        setUploadTasks(prev => prev.map(t => t.id === tempId ? { ...t, progress: 100, status: 'success' } : t));
+        
+        // Append to ready files list
+        const newEntry: UploadedFileEntry = {
+          id: metadata.jobId,
+          fileObject: file,
+          fileName: metadata.fileName,
+          fileUrl: metadata.fileUrl,
+          fileSize: metadata.fileSize,
+          totalPages,
+          selectedPages: allPages,
+          printOptions: {
+            paperSize: 'A4',
+            colorMode: 'bw',
+            orientation: 'portrait',
+            duplex: false,
+            copies: 1
+          }
+        };
+        setUploadedFiles(prev => [...prev, newEntry]);
+
+        // Clean up task from list after animation completes
+        setTimeout(() => {
+          setUploadTasks(prev => prev.filter(t => t.id !== tempId));
+        }, 1500);
+
+      } catch (err: any) {
+        console.error("Upload failed for file: " + file.name, err);
+        setUploadTasks(prev => prev.map(t => t.id === tempId ? {
+          ...t,
+          status: 'error',
+          errorMsg: err.message || 'Upload failed. Check connection.'
+        } : t));
+      }
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      processFiles(e.dataTransfer.files);
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      processFiles(e.target.files);
     }
   };
 
@@ -164,7 +236,7 @@ export default function ShopPrintPortalContent() {
     });
   };
 
-  // Pricing Estimators
+  // Pricing Helpers
   const getFileEstimatedPrice = (fileEntry: UploadedFileEntry) => {
     if (!shopSettings || fileEntry.selectedPages.length === 0) return 0;
     const bwRate = parseFloat(shopSettings.bw_price || 0.10);
@@ -186,7 +258,6 @@ export default function ShopPrintPortalContent() {
     if (!shopSettings || uploadedFiles.length === 0) return;
 
     try {
-      // Create batch insert promises (Rule 24)
       const submitPromises = uploadedFiles.map(file => {
         const jobPayload = {
           id: file.id,
@@ -203,12 +274,10 @@ export default function ShopPrintPortalContent() {
 
       await Promise.all(submitPromises);
 
-      // Store context values of last upload
       const lastJobIds = uploadedFiles.map(f => f.id).join(',');
       sessionStorage.setItem('last_job_id', lastJobIds);
       sessionStorage.setItem('last_job_name', uploadedFiles[0].fileName + (uploadedFiles.length > 1 ? ` and ${uploadedFiles.length - 1} other files` : ''));
 
-      // Redirect to unified status tracker
       router.push(`/status?jobId=${lastJobIds}`);
     } catch (err) {
       console.error("Batch Job submit failed", err);
@@ -249,8 +318,9 @@ export default function ShopPrintPortalContent() {
             {/* Step Indicators */}
             <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm flex items-center justify-between">
               {[
-                { id: 1, label: 'Configure Documents' },
-                { id: 2, label: 'Review & Pay' }
+                { id: 1, label: '1. Upload Files' },
+                { id: 2, label: '2. Customize' },
+                { id: 3, label: '3. Pay & Print' }
               ].map((s) => (
                 <div key={s.id} className="flex flex-col items-center flex-1 relative">
                   <div
@@ -275,10 +345,10 @@ export default function ShopPrintPortalContent() {
               ))}
             </div>
 
-            {/* STEP 1: CONFIGURE DOCUMENTS */}
+            {/* STEP 1: BATCH UPLOAD VIEWER */}
             {step === 1 && (
               <div className="space-y-6">
-                {/* Shop Banner card */}
+                {/* Shop Rates Panel */}
                 <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm flex flex-col space-y-3">
                   <div className="flex justify-between items-center">
                     <div>
@@ -299,173 +369,280 @@ export default function ShopPrintPortalContent() {
                   </div>
                 </div>
 
-                {/* Uploaded Files List */}
-                {uploadedFiles.length > 0 && (
-                  <div className="space-y-4">
-                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">YOUR DOCUMENTS ({uploadedFiles.length})</h3>
-                    {uploadedFiles.map((fileEntry, idx) => (
-                      <div key={fileEntry.id} className="bg-white border border-gray-200 rounded-3xl p-5 shadow-sm relative space-y-4">
-                        
-                        {/* Header Details */}
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-start space-x-3 overflow-hidden pr-8">
-                            <FileText className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                            <div className="overflow-hidden">
-                              <h4 className="text-sm font-bold text-gray-800 truncate">{fileEntry.fileName}</h4>
-                              <p className="text-[10px] text-gray-400 font-bold uppercase mt-0.5">
-                                {fileEntry.selectedPages.length === fileEntry.totalPages 
-                                  ? `All ${fileEntry.totalPages} pages` 
-                                  : `Custom: ${fileEntry.selectedPages.length} of ${fileEntry.totalPages} pages`}
-                                {` • ${(fileEntry.fileSize / 1024 / 1024).toFixed(2)} MB`}
-                              </p>
-                            </div>
-                          </div>
-                          
-                          <button
-                            onClick={() => handleRemoveFile(idx)}
-                            className="text-red-400 hover:text-red-600 active:scale-95 transition p-1"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                {/* File Dropzone */}
+                <div className="space-y-3">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileSelect}
+                    accept=".pdf,application/pdf"
+                    multiple
+                    className="hidden"
+                  />
+                  <div
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="border-2 border-dashed border-gray-300 hover:border-blue-500 hover:bg-blue-50/10 transition rounded-3xl p-8 flex flex-col items-center justify-center cursor-pointer text-center min-h-[200px] bg-white shadow-sm"
+                  >
+                    <div className="bg-blue-50 text-blue-600 p-3 rounded-full mb-3">
+                      <UploadCloud className="w-8 h-8" />
+                    </div>
+                    <h3 className="font-extrabold text-gray-800 text-base mb-0.5">Upload Documents</h3>
+                    <p className="text-xs text-gray-400 mb-4 max-w-[255px]">Drag & drop one or multiple PDF files here, or tap to choose files</p>
+                    <span className="inline-block bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold py-2.5 px-6 rounded-xl shadow-md transition">
+                      Choose Files
+                    </span>
+                  </div>
+                </div>
+
+                {/* Upload Tasks Queue (Progress Bars) */}
+                {uploadTasks.length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="text-[10px] font-black text-gray-450 uppercase tracking-widest px-1">Uploading Documents...</h4>
+                    {uploadTasks.map(task => (
+                      <div key={task.id} className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm space-y-2.5">
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="font-bold text-gray-700 truncate max-w-[75%]">{task.fileName}</span>
+                          {task.status === 'uploading' && (
+                            <span className="text-blue-650 font-black animate-pulse">{task.progress}%</span>
+                          )}
+                          {task.status === 'success' && (
+                            <span className="text-green-600 font-black flex items-center space-x-0.5">
+                              <CheckCircle2 className="w-3.5 h-3.5 fill-green-50 text-green-600" />
+                              <span>Done</span>
+                            </span>
+                          )}
+                          {task.status === 'error' && (
+                            <span className="text-red-650 font-bold">Error</span>
+                          )}
                         </div>
-
-                        {/* Configurations Controls */}
-                        <div className="grid grid-cols-2 gap-4 border-t border-gray-100 pt-4 text-xs font-semibold text-gray-600">
-                          {/* 1. Color Mode Toggle */}
-                          <div>
-                            <span className="block text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">Color Mode</span>
-                            <div className="flex bg-gray-100 rounded-lg p-0.5 w-full">
-                              <button
-                                onClick={() => handleUpdateOption(idx, 'colorMode', 'bw')}
-                                className={`flex-1 text-center py-1.5 rounded-md transition font-bold ${
-                                  fileEntry.printOptions.colorMode === 'bw' 
-                                    ? 'bg-white text-gray-800 shadow-sm' 
-                                    : 'text-gray-400'
-                                }`}
-                              >
-                                B&W
-                              </button>
-                              <button
-                                onClick={() => handleUpdateOption(idx, 'colorMode', 'color')}
-                                className={`flex-1 text-center py-1.5 rounded-md transition font-bold ${
-                                  fileEntry.printOptions.colorMode === 'color' 
-                                    ? 'bg-white text-gray-850 shadow-sm' 
-                                    : 'text-gray-400'
-                                }`}
-                              >
-                                Color
-                              </button>
-                            </div>
+                        {task.status === 'uploading' && (
+                          <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
+                            <div
+                              className="bg-blue-600 h-full rounded-full transition-all duration-150"
+                              style={{ width: `${task.progress}%` }}
+                            ></div>
                           </div>
-
-                          {/* 2. Copies Input */}
-                          <div>
-                            <span className="block text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">Copies</span>
-                            <div className="flex border border-gray-200 rounded-lg items-center justify-between px-1 h-[30px] bg-white">
-                              <button
-                                onClick={() => handleUpdateOption(idx, 'copies', Math.max(1, fileEntry.printOptions.copies - 1))}
-                                className="w-7 h-7 flex items-center justify-center font-bold text-gray-500 hover:bg-gray-100 active:bg-gray-200 rounded-md transition text-sm"
-                              >
-                                -
-                              </button>
-                              <span className="text-gray-800 font-black">{fileEntry.printOptions.copies}</span>
-                              <button
-                                onClick={() => handleUpdateOption(idx, 'copies', fileEntry.printOptions.copies + 1)}
-                                className="w-7 h-7 flex items-center justify-center font-bold text-gray-500 hover:bg-gray-100 active:bg-gray-200 rounded-md transition text-sm"
-                              >
-                                +
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* 3. Duplex Mode Toggle */}
-                          <div>
-                            <span className="block text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">Double Sided</span>
-                            <button
-                              disabled={!shopSettings.duplex_price}
-                              onClick={() => handleUpdateOption(idx, 'duplex', !fileEntry.printOptions.duplex)}
-                              className={`w-full py-1.5 px-3 border rounded-lg text-center font-bold transition ${
-                                !shopSettings.duplex_price
-                                  ? 'border-gray-100 bg-gray-50/50 text-gray-300 cursor-not-allowed'
-                                  : fileEntry.printOptions.duplex 
-                                  ? 'border-blue-600 bg-blue-50/30 text-blue-700' 
-                                  : 'border-gray-200 text-gray-500 hover:bg-gray-50'
-                              }`}
-                            >
-                              {!shopSettings.duplex_price ? 'Unavailable' : fileEntry.printOptions.duplex ? 'Yes (Duplex)' : 'No (Single)'}
-                            </button>
-                          </div>
-
-                          {/* 4. Edit Pages Button */}
-                          <div>
-                            <span className="block text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">Page Range</span>
-                            <button
-                              onClick={() => setActivePreviewIdx(idx)}
-                              className="w-full py-1.5 px-3 border border-gray-200 rounded-lg text-center font-bold text-gray-500 hover:bg-gray-50 active:bg-gray-100 transition flex items-center justify-center space-x-1"
-                            >
-                              <Sliders className="w-3.5 h-3.5" />
-                              <span>Select Pages</span>
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Estimated Price for this file */}
-                        <div className="border-t border-gray-100 pt-3 flex justify-between items-center text-xs">
-                          <span className="text-gray-400 font-bold uppercase tracking-wider text-[9px]">File Subtotal</span>
-                          <span className="text-gray-800 font-black">₹{getFileEstimatedPrice(fileEntry).toFixed(2)}</span>
-                        </div>
-
+                        )}
+                        {task.errorMsg && (
+                          <p className="text-[10px] font-semibold text-red-500">{task.errorMsg}</p>
+                        )}
                       </div>
                     ))}
                   </div>
                 )}
 
-                {/* Direct Dropzone for uploading files */}
-                <div className="space-y-3">
-                  {uploadedFiles.length > 0 && (
-                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">ADD MORE DOCUMENTS</h3>
-                  )}
-                  <FileUploader
-                    onUploadComplete={handleUploadComplete}
-                    onUploadReset={undefined}
-                  />
-                </div>
-
-                {/* Sticky Pricing Summary Button */}
+                {/* Uploaded Ready Files List */}
                 {uploadedFiles.length > 0 && (
-                  <div className="pt-4">
+                  <div className="space-y-3">
+                    <h4 className="text-[10px] font-black text-gray-450 uppercase tracking-widest px-1">Uploaded Files ({uploadedFiles.length})</h4>
+                    <div className="bg-white border border-gray-200 rounded-3xl p-4 shadow-sm divide-y divide-gray-100">
+                      {uploadedFiles.map((fileEntry, idx) => (
+                        <div key={fileEntry.id} className="flex justify-between items-center py-3 first:pt-0 last:pb-0">
+                          <div className="flex items-center space-x-2.5 overflow-hidden max-w-[80%]">
+                            <FileText className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                            <div className="overflow-hidden">
+                              <p className="text-xs font-bold text-gray-700 truncate">{fileEntry.fileName}</p>
+                              <span className="text-[10px] text-gray-400 font-bold">
+                                {fileEntry.totalPages} pages • {(fileEntry.fileSize / 1024 / 1024).toFixed(2)} MB
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleRemoveFile(idx)}
+                            className="text-red-400 hover:text-red-600 p-1"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 1 Actions */}
+                {uploadedFiles.length > 0 && (
+                  <div className="pt-2">
                     <button
+                      disabled={uploadTasks.some(t => t.status === 'uploading')}
                       onClick={() => setStep(2)}
-                      className="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-extrabold text-base py-4 rounded-2xl shadow-lg transition flex items-center justify-between px-6"
+                      className="w-full bg-blue-650 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-extrabold text-sm py-4 rounded-2xl shadow-md transition flex items-center justify-center space-x-1"
                     >
-                      <div className="text-left">
-                        <span className="text-[10px] text-blue-100 uppercase tracking-wider block font-bold">Total: {uploadedFiles.length} file(s)</span>
-                        <span className="text-lg">₹{getEstimatedPrice().toFixed(2)}</span>
-                      </div>
-                      <div className="flex items-center space-x-1.5">
-                        <span>Review Order</span>
-                        <ArrowRight className="w-5 h-5" />
-                      </div>
+                      <span>Next: Configure Prints</span>
+                      <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>
                 )}
               </div>
             )}
 
-            {/* STEP 2: REVIEW & PAY */}
+            {/* STEP 2: PRINT CONFIGURATION CARD LIST */}
             {step === 2 && (
               <div className="space-y-6">
                 <div className="text-center py-1">
-                  <h2 className="text-lg font-extrabold text-gray-900 leading-snug">Review Order</h2>
-                  <p className="text-xs text-gray-400 font-medium mt-0.5">Double-check specifications before paying.</p>
+                  <h2 className="text-lg font-extrabold text-gray-900 leading-snug">Configure Settings</h2>
+                  <p className="text-xs text-gray-400 font-medium mt-0.5">Customize print values for each document.</p>
                 </div>
 
-                {/* Order Summary List */}
+                <div className="space-y-4">
+                  {uploadedFiles.map((fileEntry, idx) => (
+                    <div key={fileEntry.id} className="bg-white border border-gray-200 rounded-3xl p-5 shadow-sm space-y-4">
+                      
+                      {/* Header details */}
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start space-x-3 overflow-hidden pr-8">
+                          <FileText className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                          <div className="overflow-hidden">
+                            <h4 className="text-sm font-bold text-gray-800 truncate">{fileEntry.fileName}</h4>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase mt-0.5">
+                              {fileEntry.selectedPages.length === fileEntry.totalPages 
+                                ? `All ${fileEntry.totalPages} pages` 
+                                : `Custom: ${fileEntry.selectedPages.length} of ${fileEntry.totalPages} pages`}
+                              {` • ${(fileEntry.fileSize / 1024 / 1024).toFixed(2)} MB`}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleRemoveFile(idx)}
+                          className="text-red-400 hover:text-red-600 p-1"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Control Panel Settings */}
+                      <div className="grid grid-cols-2 gap-4 border-t border-gray-100 pt-4 text-xs font-semibold text-gray-650">
+                        {/* Color mode */}
+                        <div>
+                          <span className="block text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">Color Option</span>
+                          <div className="flex bg-gray-100 rounded-lg p-0.5 w-full">
+                            <button
+                              onClick={() => handleUpdateOption(idx, 'colorMode', 'bw')}
+                              className={`flex-1 text-center py-1.5 rounded-md transition font-bold ${
+                                fileEntry.printOptions.colorMode === 'bw' 
+                                  ? 'bg-white text-gray-800 shadow-sm' 
+                                  : 'text-gray-400'
+                              }`}
+                            >
+                              B&W
+                            </button>
+                            <button
+                              onClick={() => handleUpdateOption(idx, 'colorMode', 'color')}
+                              className={`flex-1 text-center py-1.5 rounded-md transition font-bold ${
+                                fileEntry.printOptions.colorMode === 'color' 
+                                  ? 'bg-white text-gray-850 shadow-sm' 
+                                  : 'text-gray-400'
+                              }`}
+                            >
+                              Color
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Copies */}
+                        <div>
+                          <span className="block text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">Copies</span>
+                          <div className="flex border border-gray-200 rounded-lg items-center justify-between px-1 h-[30px] bg-white">
+                            <button
+                              onClick={() => handleUpdateOption(idx, 'copies', Math.max(1, fileEntry.printOptions.copies - 1))}
+                              className="w-7 h-7 flex items-center justify-center font-bold text-gray-500 hover:bg-gray-100 active:bg-gray-200 rounded-md transition text-sm"
+                            >
+                              -
+                            </button>
+                            <span className="text-gray-800 font-black">{fileEntry.printOptions.copies}</span>
+                            <button
+                              onClick={() => handleUpdateOption(idx, 'copies', fileEntry.printOptions.copies + 1)}
+                              className="w-7 h-7 flex items-center justify-center font-bold text-gray-500 hover:bg-gray-100 active:bg-gray-200 rounded-md transition text-sm"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Duplex */}
+                        <div>
+                          <span className="block text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">Double Sided</span>
+                          <button
+                            disabled={!shopSettings.duplex_price}
+                            onClick={() => handleUpdateOption(idx, 'duplex', !fileEntry.printOptions.duplex)}
+                            className={`w-full py-1.5 px-3 border rounded-lg text-center font-bold transition ${
+                              !shopSettings.duplex_price
+                                ? 'border-gray-100 bg-gray-50/50 text-gray-300 cursor-not-allowed'
+                                : fileEntry.printOptions.duplex 
+                                ? 'border-blue-600 bg-blue-50/30 text-blue-700' 
+                                : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                            }`}
+                          >
+                            {!shopSettings.duplex_price ? 'Unavailable' : fileEntry.printOptions.duplex ? 'Yes (Duplex)' : 'No (Single)'}
+                          </button>
+                        </div>
+
+                        {/* Custom pages select */}
+                        <div>
+                          <span className="block text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">Select Pages</span>
+                          <button
+                            onClick={() => setActivePreviewIdx(idx)}
+                            className="w-full py-1.5 px-3 border border-gray-200 rounded-lg text-center font-bold text-gray-500 hover:bg-gray-50 active:bg-gray-100 transition flex items-center justify-center space-x-1"
+                          >
+                            <Sliders className="w-3.5 h-3.5" />
+                            <span>Select Pages</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* File Total Price */}
+                      <div className="border-t border-gray-100 pt-3 flex justify-between items-center text-xs">
+                        <span className="text-gray-400 font-bold uppercase tracking-wider text-[9px]">File Subtotal</span>
+                        <span className="text-gray-800 font-black">₹{getFileEstimatedPrice(fileEntry).toFixed(2)}</span>
+                      </div>
+
+                    </div>
+                  ))}
+                </div>
+
+                {/* Subtotal Box & Step Navigation Buttons */}
+                <div className="bg-white border border-gray-200 rounded-3xl p-5 shadow-sm space-y-4">
+                  <div className="flex justify-between items-center text-sm font-bold">
+                    <span className="text-gray-500">Subtotal ({uploadedFiles.length} files)</span>
+                    <span className="text-xl font-black text-blue-600">₹{getEstimatedPrice().toFixed(2)}</span>
+                  </div>
+                  
+                  <div className="flex space-x-3 pt-2">
+                    <button
+                      onClick={() => setStep(1)}
+                      className="flex-1 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 font-bold py-3.5 px-4 rounded-2xl transition text-sm flex items-center justify-center space-x-1"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                      <span>Add More Files</span>
+                    </button>
+                    <button
+                      onClick={() => setStep(3)}
+                      disabled={uploadedFiles.length === 0}
+                      className="flex-1 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-40 text-white font-bold py-3.5 px-4 rounded-2xl shadow-md transition text-sm flex items-center justify-center space-x-1"
+                    >
+                      <span>Proceed to Pay</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 3: CHECKOUT & PAYMENT */}
+            {step === 3 && (
+              <div className="space-y-6">
+                <div className="text-center py-1">
+                  <h2 className="text-lg font-extrabold text-gray-900 leading-snug">Review & Pay</h2>
+                  <p className="text-xs text-gray-400 font-medium mt-0.5">Check specifications before completing payment.</p>
+                </div>
+
+                {/* Checkout Summary card */}
                 <div className="bg-white border border-gray-200 rounded-3xl p-5 shadow-sm space-y-4">
                   <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2 mb-2">Checkout Details</h3>
                   
                   {uploadedFiles.map((fileEntry, idx) => (
-                    <div key={fileEntry.id} className="flex justify-between items-start text-xs border-b border-dashed border-gray-100 pb-3 last:border-b-0 last:pb-0">
+                    <div key={fileEntry.id} className="flex justify-between items-start text-xs border-b border-dashed border-gray-100 pb-3 last:border-b-0 last:pb-0 font-semibold">
                       <div className="overflow-hidden pr-4 max-w-[70%]">
                         <p className="font-bold text-gray-700 truncate">{fileEntry.fileName}</p>
                         <span className="text-[10px] text-gray-400 font-medium">
@@ -489,7 +666,7 @@ export default function ShopPrintPortalContent() {
                   amount={getEstimatedPrice()}
                   jobId={uploadedFiles[0]?.id}
                   onPaymentSuccess={handlePaymentSuccess}
-                  onPaymentCancel={() => setStep(1)}
+                  onPaymentCancel={() => setStep(2)}
                 />
               </div>
             )}
