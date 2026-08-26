@@ -116,7 +116,7 @@ export default function Home() {
       {/* 2. HOW IT WORKS SECTION */}
       <section id="how-it-works" className="py-10 border-t border-gray-100">
         <div className="text-center mb-8">
-          <h2 className="text-2xl font-black text-gray-900">How PrintZap Works</h2>
+          <h2 className="text-2xl font-black text-gray-900">How PrintBolt Works</h2>
           <p className="text-xs text-gray-400 font-semibold mt-1">Get your prints in four simple steps</p>
         </div>
 
@@ -126,7 +126,7 @@ export default function Home() {
               step: "01",
               icon: <QrCode className="w-5 h-5 text-blue-600" />,
               title: "Scan QR",
-              desc: "Scan the PrintZap QR code sticker on the shopkeeper's desk to connect."
+              desc: "Scan the PrintBolt QR code sticker on the shopkeeper's desk to connect."
             },
             {
               step: "02",

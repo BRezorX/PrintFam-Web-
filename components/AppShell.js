@@ -14,7 +14,7 @@ export default function AppShell({ children, shopName, email, maxWidth = 'max-w-
               </svg>
             </div>
             <div>
-              <span className="font-extrabold text-lg tracking-tight text-gray-900 block leading-none">PrintZap</span>
+              <span className="font-extrabold text-lg tracking-tight text-gray-900 block leading-none">PrintBolt</span>
               {shopName && <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{shopName}</span>}
             </div>
           </div>
@@ -44,7 +44,7 @@ export default function AppShell({ children, shopName, email, maxWidth = 'max-w-
               <ShieldCheck className="w-3.5 h-3.5 mr-1 text-blue-500" /> Secure SSL Connection
             </span>
           </div>
-          <p className="text-[11px] text-gray-400 font-medium">© {new Date().getFullYear()} PrintZap Automatic Printing System. All rights reserved.</p>
+          <p className="text-[11px] text-gray-400 font-medium">© {new Date().getFullYear()} PrintBolt Automatic Printing System. All rights reserved.</p>
         </div>
       </footer>
     </div>

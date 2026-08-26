@@ -5,7 +5,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "PrintZap | Customer Print Portal",
+  title: "PrintBolt | Customer Print Portal",
   description: "Scan, upload, pay and print instantly at your nearest print shop.",
 };
 

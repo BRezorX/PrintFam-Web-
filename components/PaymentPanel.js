@@ -54,7 +54,7 @@ export default function PaymentPanel({ amount, onPaymentSuccess, onPaymentCancel
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         amount: orderData.amount,
         currency: orderData.currency,
-        name: "PrintZap Kiosk",
+        name: "PrintBolt Kiosk",
         description: "Self-Service Document Printing",
         order_id: orderData.order_id,
         handler: async function (rzpResponse) {
@@ -90,7 +90,7 @@ export default function PaymentPanel({ amount, onPaymentSuccess, onPaymentCancel
         },
         prefill: {
           name: "Customer",
-          email: "customer@printzap.in",
+          email: "customer@printbolt.store",
         },
         theme: {
           color: "#2563EB", // Brand color Blue
