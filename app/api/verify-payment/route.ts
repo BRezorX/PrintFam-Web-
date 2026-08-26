@@ -1,11 +1,33 @@
 import { NextResponse } from 'next/server';
-import crypto from 'crypto';
+
+export const runtime = 'edge';
+
+// Edge-native HMAC-SHA256 calculator using the Web Crypto API
+async function hmacSha256(message: string, secret: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(secret);
+  const messageData = encoder.encode(message);
+
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+
+  const signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, messageData);
+  
+  // Convert ArrayBuffer to hexadecimal string representation
+  return Array.from(new Uint8Array(signatureBuffer))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
 
 export async function POST(request: Request) {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = await request.json();
 
-    // Verify all required signature elements are present
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
       return NextResponse.json(
         { error: 'Missing required signature verification parameters.' },
@@ -21,13 +43,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Generate expected signature based on Razorpay standard verification:
-    // HMAC-SHA256("order_id|payment_id", secret)
+    // Verify payment signature
     const text = razorpay_order_id + '|' + razorpay_payment_id;
-    const generatedSignature = crypto
-      .createHmac('sha256', keySecret)
-      .update(text)
-      .digest('hex');
+    const generatedSignature = await hmacSha256(text, keySecret);
 
     if (generatedSignature === razorpay_signature) {
       return NextResponse.json({

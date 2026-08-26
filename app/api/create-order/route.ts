@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import Razorpay from 'razorpay';
+
+export const runtime = 'edge';
 
 export async function POST(request: Request) {
   try {
@@ -23,21 +24,34 @@ export async function POST(request: Request) {
       );
     }
 
-    const razorpay = new Razorpay({
-      key_id: keyId,
-      key_secret: keySecret,
+    // Call Razorpay API using standard fetch (Edge compatible)
+    const authString = btoa(`${keyId}:${keySecret}`);
+    const response = await fetch('https://api.razorpay.com/v1/orders', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Basic ${authString}`,
+      },
+      body: JSON.stringify({
+        amount: Math.round(amount),
+        currency: 'INR',
+        receipt: receipt || `receipt_${Date.now()}`,
+      }),
     });
 
-    const order = await razorpay.orders.create({
-      amount: Math.round(amount),
-      currency: 'INR',
-      receipt: receipt || `receipt_${Date.now()}`,
-    });
+    const orderData = await response.json();
+
+    if (!response.ok) {
+      return NextResponse.json(
+        { error: orderData.error?.description || 'Failed to create order on Razorpay.' },
+        { status: response.status }
+      );
+    }
 
     return NextResponse.json({
-      order_id: order.id,
-      amount: order.amount,
-      currency: order.currency,
+      order_id: orderData.id,
+      amount: orderData.amount,
+      currency: orderData.currency,
     });
   } catch (error: any) {
     console.error('Error creating Razorpay order:', error);
