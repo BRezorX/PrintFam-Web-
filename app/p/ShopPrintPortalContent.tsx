@@ -236,17 +236,58 @@ export default function ShopPrintPortalContent() {
     });
   };
 
-  // Pricing Helpers
-  const getFileEstimatedPrice = (fileEntry: UploadedFileEntry) => {
-    if (!shopSettings || fileEntry.selectedPages.length === 0) return 0;
+  // Pricing Calculation with Volume / Bulk Discounts
+  const calculatePricingDetails = (fileEntry: UploadedFileEntry) => {
+    if (!shopSettings || !fileEntry || fileEntry.selectedPages.length === 0) {
+      return { baseRate: 0, effectiveRate: 0, totalPages: 0, basePrice: 0, discountPercent: 0, discountAmount: 0, finalPrice: 0, tier: null };
+    }
+
     const bwRate = parseFloat(shopSettings.bw_price || 0.10);
     const colorRate = parseFloat(shopSettings.color_price || 0.50);
     const duplexRate = parseFloat(shopSettings.duplex_price || 0.08);
 
-    const baseRate = fileEntry.printOptions.colorMode === 'color' ? colorRate : bwRate;
+    const isColor = fileEntry.printOptions.colorMode === 'color';
+    const baseRate = isColor ? colorRate : bwRate;
     const effectiveRate = fileEntry.printOptions.duplex ? duplexRate : baseRate;
 
-    return effectiveRate * fileEntry.selectedPages.length * fileEntry.printOptions.copies;
+    const totalPages = fileEntry.selectedPages.length * fileEntry.printOptions.copies;
+    const basePrice = effectiveRate * totalPages;
+
+    let discountPercent = 0;
+    let qualifyingTier: any = null;
+
+    const discountRules = shopSettings.discount_rules;
+    if (discountRules) {
+      const tierList = isColor ? discountRules.color_discounts : discountRules.bw_discounts;
+      if (Array.isArray(tierList) && tierList.length > 0) {
+        const sortedTiers = [...tierList]
+          .filter(t => t && t.min_pages > 0 && t.discount_percent > 0 && totalPages >= t.min_pages)
+          .sort((a, b) => b.min_pages - a.min_pages);
+
+        if (sortedTiers.length > 0) {
+          qualifyingTier = sortedTiers[0];
+          discountPercent = sortedTiers[0].discount_percent;
+        }
+      }
+    }
+
+    const discountAmount = (basePrice * discountPercent) / 100;
+    const finalPrice = Math.max(0, basePrice - discountAmount);
+
+    return {
+      baseRate,
+      effectiveRate,
+      totalPages,
+      basePrice,
+      discountPercent,
+      discountAmount,
+      finalPrice,
+      tier: qualifyingTier
+    };
+  };
+
+  const getFileEstimatedPrice = (fileEntry: UploadedFileEntry) => {
+    return calculatePricingDetails(fileEntry).finalPrice;
   };
 
   const getEstimatedPrice = () => {
@@ -369,6 +410,28 @@ export default function ShopPrintPortalContent() {
                       <span>Duplex: <strong className="text-gray-800">₹{parseFloat(shopSettings.duplex_price).toFixed(2)}/pg</strong></span>
                     )}
                   </div>
+
+                  {/* Active Volume Discounts Indicator */}
+                  {shopSettings.discount_rules && (
+                    ((shopSettings.discount_rules.bw_discounts && shopSettings.discount_rules.bw_discounts.length > 0) ||
+                     (shopSettings.discount_rules.color_discounts && shopSettings.discount_rules.color_discounts.length > 0)) && (
+                      <div className="pt-2 border-t border-gray-100 flex flex-wrap gap-1.5 items-center">
+                        <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100 flex items-center gap-1">
+                          🏷️ Bulk Discounts:
+                        </span>
+                        {shopSettings.discount_rules.bw_discounts?.map((t: any, i: number) => (
+                          <span key={'bw_' + i} className="text-[10px] font-semibold text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full">
+                            B&W {t.min_pages}+ pgs ({t.discount_percent}% OFF)
+                          </span>
+                        ))}
+                        {shopSettings.discount_rules.color_discounts?.map((t: any, i: number) => (
+                          <span key={'c_' + i} className="text-[10px] font-semibold text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full">
+                            Color {t.min_pages}+ pgs ({t.discount_percent}% OFF)
+                          </span>
+                        ))}
+                      </div>
+                    )
+                  )}
                 </div>
 
                 {/* File Dropzone */}
@@ -453,25 +516,18 @@ export default function ShopPrintPortalContent() {
                           </div>
                           <button
                             onClick={() => handleRemoveFile(idx)}
-                            className="text-red-400 hover:text-red-600 p-1"
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       ))}
                     </div>
-                  </div>
-                )}
-
-                {/* Step 1 Actions */}
-                {uploadedFiles.length > 0 && (
-                  <div className="pt-2">
                     <button
-                      disabled={uploadTasks.some(t => t.status === 'uploading')}
                       onClick={() => setStep(2)}
-                      className="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-extrabold text-sm py-4 rounded-2xl shadow-md transition flex items-center justify-center space-x-1"
+                      className="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold py-3.5 px-4 rounded-2xl shadow-md transition text-sm flex items-center justify-center space-x-1"
                     >
-                      <span>Next: Configure Prints</span>
+                      <span>Continue to Print Options ({uploadedFiles.length} files)</span>
                       <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>
@@ -479,62 +535,61 @@ export default function ShopPrintPortalContent() {
               </div>
             )}
 
-            {/* STEP 2: PRINT CONFIGURATION CARD LIST */}
+            {/* STEP 2: PER-FILE PRINT SETTINGS CONFIGURATOR */}
             {step === 2 && (
               <div className="space-y-6">
-                <div className="text-center py-1">
-                  <h2 className="text-lg font-extrabold text-gray-900 leading-snug">Configure Settings</h2>
-                  <p className="text-xs text-gray-400 font-medium mt-0.5">Customize print values for each document.</p>
+                <div className="flex justify-between items-center">
+                  <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">Configure Print Options</h3>
+                  <span className="text-xs text-gray-400 font-bold">{uploadedFiles.length} file{uploadedFiles.length > 1 ? 's' : ''}</span>
                 </div>
 
+                {/* Per-File Options Accordion/Cards */}
                 <div className="space-y-4">
                   {uploadedFiles.map((fileEntry, idx) => (
                     <div key={fileEntry.id} className="bg-white border border-gray-200 rounded-3xl p-5 shadow-sm space-y-4">
-                      
-                      {/* Header details */}
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start space-x-3 overflow-hidden pr-8">
-                          <FileText className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                      {/* File Card Header */}
+                      <div className="flex justify-between items-start">
+                        <div className="flex items-center space-x-2.5 overflow-hidden max-w-[85%]">
+                          <div className="bg-blue-50 text-blue-600 p-2 rounded-xl">
+                            <FileText className="w-4 h-4" />
+                          </div>
                           <div className="overflow-hidden">
-                            <h4 className="text-sm font-bold text-gray-800 truncate">{fileEntry.fileName}</h4>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase mt-0.5">
-                              {fileEntry.selectedPages.length === fileEntry.totalPages 
-                                ? `All ${fileEntry.totalPages} pages` 
-                                : `Custom: ${fileEntry.selectedPages.length} of ${fileEntry.totalPages} pages`}
-                              {` • ${(fileEntry.fileSize / 1024 / 1024).toFixed(2)} MB`}
-                            </p>
+                            <h4 className="font-extrabold text-gray-800 text-sm truncate">{fileEntry.fileName}</h4>
+                            <span className="text-[10px] text-gray-400 font-bold">
+                              {fileEntry.selectedPages.length} of {fileEntry.totalPages} pages selected • {fileEntry.printOptions.copies} {fileEntry.printOptions.copies > 1 ? 'copies' : 'copy'}
+                            </span>
                           </div>
                         </div>
                         <button
                           onClick={() => handleRemoveFile(idx)}
-                          className="text-red-400 hover:text-red-600 p-1"
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
 
-                      {/* Control Panel Settings */}
-                      <div className="grid grid-cols-2 gap-4 border-t border-gray-100 pt-4 text-xs font-semibold text-gray-600">
-                        {/* Color mode */}
+                      {/* Options Controls Grid */}
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        {/* Color Mode */}
                         <div>
-                          <span className="block text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">Color Option</span>
-                          <div className="flex bg-gray-100 rounded-lg p-0.5 w-full">
+                          <span className="block text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">Color Mode</span>
+                          <div className="grid grid-cols-2 gap-1 bg-gray-100 p-0.5 rounded-lg">
                             <button
                               onClick={() => handleUpdateOption(idx, 'colorMode', 'bw')}
-                              className={`flex-1 text-center py-1.5 rounded-md transition font-bold ${
-                                fileEntry.printOptions.colorMode === 'bw' 
-                                  ? 'bg-white text-gray-800 shadow-sm' 
-                                  : 'text-gray-400'
+                              className={`py-1 rounded-md text-[10px] font-bold transition ${
+                                fileEntry.printOptions.colorMode === 'bw'
+                                  ? 'bg-white text-gray-800 shadow-sm'
+                                  : 'text-gray-500 hover:text-gray-800'
                               }`}
                             >
                               B&W
                             </button>
                             <button
                               onClick={() => handleUpdateOption(idx, 'colorMode', 'color')}
-                              className={`flex-1 text-center py-1.5 rounded-md transition font-bold ${
-                                fileEntry.printOptions.colorMode === 'color' 
-                                  ? 'bg-white text-gray-850 shadow-sm' 
-                                  : 'text-gray-400'
+                              className={`py-1 rounded-md text-[10px] font-bold transition ${
+                                fileEntry.printOptions.colorMode === 'color'
+                                  ? 'bg-white text-blue-600 shadow-sm'
+                                  : 'text-gray-500 hover:text-gray-800'
                               }`}
                             >
                               Color
@@ -542,42 +597,44 @@ export default function ShopPrintPortalContent() {
                           </div>
                         </div>
 
-                        {/* Copies */}
+                        {/* Duplex Toggle */}
+                        <div>
+                          <span className="block text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">Sides</span>
+                          <button
+                            onClick={() => handleUpdateOption(idx, 'duplex', !fileEntry.printOptions.duplex)}
+                            disabled={!shopSettings.duplex_price}
+                            className={`w-full py-1.5 px-2 border rounded-lg text-center text-[10px] font-bold transition ${
+                              !shopSettings.duplex_price
+                                ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+                                : fileEntry.printOptions.duplex
+                                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                            }`}
+                          >
+                            {!shopSettings.duplex_price ? 'Unavailable' : fileEntry.printOptions.duplex ? 'Double-Sided' : 'Single-Sided'}
+                          </button>
+                        </div>
+
+                        {/* Copies counter */}
                         <div>
                           <span className="block text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">Copies</span>
-                          <div className="flex border border-gray-200 rounded-lg items-center justify-between px-1 h-[30px] bg-white">
+                          <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden bg-white">
                             <button
                               onClick={() => handleUpdateOption(idx, 'copies', Math.max(1, fileEntry.printOptions.copies - 1))}
-                              className="w-7 h-7 flex items-center justify-center font-bold text-gray-500 hover:bg-gray-100 active:bg-gray-200 rounded-md transition text-sm"
+                              className="px-2.5 py-1 text-gray-500 hover:bg-gray-100 active:bg-gray-200 font-bold text-xs"
                             >
                               -
                             </button>
-                            <span className="text-gray-800 font-black">{fileEntry.printOptions.copies}</span>
+                            <span className="flex-1 text-center font-extrabold text-gray-800 text-xs">
+                              {fileEntry.printOptions.copies}
+                            </span>
                             <button
                               onClick={() => handleUpdateOption(idx, 'copies', fileEntry.printOptions.copies + 1)}
-                              className="w-7 h-7 flex items-center justify-center font-bold text-gray-500 hover:bg-gray-100 active:bg-gray-200 rounded-md transition text-sm"
+                              className="px-2.5 py-1 text-gray-500 hover:bg-gray-100 active:bg-gray-200 font-bold text-xs"
                             >
                               +
                             </button>
                           </div>
-                        </div>
-
-                        {/* Duplex */}
-                        <div>
-                          <span className="block text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">Double Sided</span>
-                          <button
-                            disabled={!shopSettings.duplex_price}
-                            onClick={() => handleUpdateOption(idx, 'duplex', !fileEntry.printOptions.duplex)}
-                            className={`w-full py-1.5 px-3 border rounded-lg text-center font-bold transition ${
-                              !shopSettings.duplex_price
-                                ? 'border-gray-100 bg-gray-50/50 text-gray-300 cursor-not-allowed'
-                                : fileEntry.printOptions.duplex 
-                                ? 'border-blue-600 bg-blue-50/30 text-blue-700' 
-                                : 'border-gray-200 text-gray-500 hover:bg-gray-50'
-                            }`}
-                          >
-                            {!shopSettings.duplex_price ? 'Unavailable' : fileEntry.printOptions.duplex ? 'Yes (Duplex)' : 'No (Single)'}
-                          </button>
                         </div>
 
                         {/* Custom pages select */}
@@ -593,40 +650,53 @@ export default function ShopPrintPortalContent() {
                         </div>
                       </div>
 
-                      {/* File Total Price */}
-                      <div className="border-t border-gray-100 pt-3 flex justify-between items-center text-xs">
-                        <span className="text-gray-400 font-bold uppercase tracking-wider text-[9px]">File Subtotal</span>
-                        <span className="text-gray-800 font-black">₹{getFileEstimatedPrice(fileEntry).toFixed(2)}</span>
-                      </div>
+                      {/* File Total Price with Discount Breakdown */}
+                      {(() => {
+                        const pricing = calculatePricingDetails(fileEntry);
+                        return (
+                          <div className="border-t border-gray-100 pt-3 flex flex-col space-y-1">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-gray-400 font-bold uppercase tracking-wider text-[9px]">File Subtotal</span>
+                              <div className="flex items-baseline space-x-1.5">
+                                {pricing.discountPercent > 0 && (
+                                  <span className="line-through text-gray-400 text-xs font-semibold">
+                                    ₹{pricing.basePrice.toFixed(2)}
+                                  </span>
+                                )}
+                                <span className={`font-black ${pricing.discountPercent > 0 ? 'text-green-600 text-sm' : 'text-gray-800'}`}>
+                                  ₹{pricing.finalPrice.toFixed(2)}
+                                </span>
+                              </div>
+                            </div>
+                            {pricing.discountPercent > 0 && (
+                              <div className="flex justify-end">
+                                <span className="text-[10px] text-green-700 font-bold bg-green-50 px-2 py-0.5 rounded-full border border-green-100">
+                                  🎉 {pricing.discountPercent}% bulk discount applied (-₹{pricing.discountAmount.toFixed(2)})
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
 
                     </div>
                   ))}
                 </div>
 
-                {/* Subtotal Box & Step Navigation Buttons */}
-                <div className="bg-white border border-gray-200 rounded-3xl p-5 shadow-sm space-y-4">
-                  <div className="flex justify-between items-center text-sm font-bold">
-                    <span className="text-gray-500">Subtotal ({uploadedFiles.length} files)</span>
-                    <span className="text-xl font-black text-blue-600">₹{getEstimatedPrice().toFixed(2)}</span>
-                  </div>
-                  
-                  <div className="flex space-x-3 pt-2">
-                    <button
-                      onClick={() => setStep(1)}
-                      className="flex-1 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 font-bold py-3.5 px-4 rounded-2xl transition text-sm flex items-center justify-center space-x-1"
-                    >
-                      <ArrowLeft className="w-4 h-4" />
-                      <span>Add More Files</span>
-                    </button>
-                    <button
-                      onClick={() => setStep(3)}
-                      disabled={uploadedFiles.length === 0}
-                      className="flex-1 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-40 text-white font-bold py-3.5 px-4 rounded-2xl shadow-md transition text-sm flex items-center justify-center space-x-1"
-                    >
-                      <span>Proceed to Pay</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
-                  </div>
+                {/* Step 2 Actions */}
+                <div className="flex space-x-3">
+                  <button
+                    onClick={() => setStep(1)}
+                    className="flex-1 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 font-bold py-3.5 px-4 rounded-2xl transition text-sm"
+                  >
+                    Back
+                  </button>
+                  <button
+                    onClick={() => setStep(3)}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold py-3.5 px-4 rounded-2xl shadow-md transition text-sm"
+                  >
+                    Proceed to Pay
+                  </button>
                 </div>
               </div>
             )}
@@ -643,19 +713,34 @@ export default function ShopPrintPortalContent() {
                 <div className="bg-white border border-gray-200 rounded-3xl p-5 shadow-sm space-y-4">
                   <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2 mb-2">Checkout Details</h3>
                   
-                  {uploadedFiles.map((fileEntry, idx) => (
-                    <div key={fileEntry.id} className="flex justify-between items-start text-xs border-b border-dashed border-gray-100 pb-3 last:border-b-0 last:pb-0 font-semibold">
-                      <div className="overflow-hidden pr-4 max-w-[70%]">
-                        <p className="font-bold text-gray-700 truncate">{fileEntry.fileName}</p>
-                        <span className="text-[10px] text-gray-400 font-medium">
-                          {fileEntry.selectedPages.length} pgs × {fileEntry.printOptions.copies} copies • {fileEntry.printOptions.colorMode === 'color' ? 'Color' : 'B&W'} {fileEntry.printOptions.duplex && '• Duplex'}
-                        </span>
+                  {uploadedFiles.map((fileEntry, idx) => {
+                    const pricing = calculatePricingDetails(fileEntry);
+                    return (
+                      <div key={fileEntry.id} className="flex justify-between items-start text-xs border-b border-dashed border-gray-100 pb-3 last:border-b-0 last:pb-0 font-semibold">
+                        <div className="overflow-hidden pr-4 max-w-[70%]">
+                          <p className="font-bold text-gray-700 truncate">{fileEntry.fileName}</p>
+                          <span className="text-[10px] text-gray-400 font-medium block">
+                            {fileEntry.selectedPages.length} pgs × {fileEntry.printOptions.copies} copies • {fileEntry.printOptions.colorMode === 'color' ? 'Color' : 'B&W'} {fileEntry.printOptions.duplex && '• Duplex'}
+                          </span>
+                          {pricing.discountPercent > 0 && (
+                            <span className="inline-block text-[9px] text-green-700 font-bold bg-green-50 px-1.5 py-0.5 rounded border border-green-100 mt-1">
+                              🎉 {pricing.discountPercent}% Volume Discount (-₹{pricing.discountAmount.toFixed(2)})
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-right flex-shrink-0 mt-0.5">
+                          {pricing.discountPercent > 0 && (
+                            <span className="line-through text-gray-400 text-[10px] block">
+                              ₹{pricing.basePrice.toFixed(2)}
+                            </span>
+                          )}
+                          <span className={`font-black ${pricing.discountPercent > 0 ? 'text-green-600' : 'text-gray-800'}`}>
+                            ₹{pricing.finalPrice.toFixed(2)}
+                          </span>
+                        </div>
                       </div>
-                      <span className="font-black text-gray-800 flex-shrink-0 mt-0.5">
-                        ₹{getFileEstimatedPrice(fileEntry).toFixed(2)}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   <div className="border-t border-gray-100 pt-4 flex justify-between items-center text-sm font-bold">
                     <span className="text-gray-500">Order Total</span>

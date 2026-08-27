@@ -15,7 +15,27 @@ export default function PriceBreakdown({ pagesCount, copies, settings, shopSetti
 
   // Total pages printed = selected pages * copies
   const totalPagesPrinted = pagesCount * copies;
-  const totalCost = effectiveRate * totalPagesPrinted;
+  const rawTotalCost = effectiveRate * totalPagesPrinted;
+
+  // Volume discount logic
+  let discountPercent = 0;
+  const discountRules = shopSettings.discount_rules;
+  if (discountRules) {
+    const isColor = settings.colorMode === 'color';
+    const tierList = isColor ? discountRules.color_discounts : discountRules.bw_discounts;
+    if (Array.isArray(tierList) && tierList.length > 0) {
+      const sortedTiers = [...tierList]
+        .filter(t => t && t.min_pages > 0 && t.discount_percent > 0 && totalPagesPrinted >= t.min_pages)
+        .sort((a, b) => b.min_pages - a.min_pages);
+
+      if (sortedTiers.length > 0) {
+        discountPercent = sortedTiers[0].discount_percent;
+      }
+    }
+  }
+
+  const discountAmount = (rawTotalCost * discountPercent) / 100;
+  const totalCost = Math.max(0, rawTotalCost - discountAmount);
 
   return (
     <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
@@ -23,9 +43,21 @@ export default function PriceBreakdown({ pagesCount, copies, settings, shopSetti
       <div className="p-4 flex justify-between items-center bg-gray-50 border-b border-gray-100">
         <div>
           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Estimated Price</span>
-          <span className="text-2xl font-extrabold text-gray-900">
-            ₹{totalCost.toFixed(2)}
-          </span>
+          <div className="flex items-baseline space-x-2">
+            {discountPercent > 0 && (
+              <span className="text-sm font-bold text-gray-400 line-through">
+                ₹{rawTotalCost.toFixed(2)}
+              </span>
+            )}
+            <span className={`text-2xl font-extrabold ${discountPercent > 0 ? 'text-green-600' : 'text-gray-900'}`}>
+              ₹{totalCost.toFixed(2)}
+            </span>
+            {discountPercent > 0 && (
+              <span className="text-[10px] font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+                {discountPercent}% OFF
+              </span>
+            )}
+          </div>
         </div>
         <button
           onClick={() => setExpanded(!expanded)}
@@ -51,6 +83,12 @@ export default function PriceBreakdown({ pagesCount, copies, settings, shopSetti
             <span>Page Rate ({settings.colorMode === 'color' ? 'Color' : 'B&W'}{settings.duplex ? ', Duplex' : ''})</span>
             <span className="font-semibold text-gray-800">₹{effectiveRate.toFixed(2)} / pg</span>
           </div>
+          {discountPercent > 0 && (
+            <div className="flex justify-between items-center text-green-600 font-bold bg-green-50/70 px-2 py-1 rounded-lg">
+              <span>Volume Discount ({discountPercent}% off)</span>
+              <span>-₹{discountAmount.toFixed(2)}</span>
+            </div>
+          )}
           <div className="flex justify-between items-center text-gray-600 border-t border-gray-100 pt-2.5">
             <span className="flex items-center">
               Paper Size
