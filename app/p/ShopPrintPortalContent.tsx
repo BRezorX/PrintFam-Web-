@@ -236,7 +236,57 @@ export default function ShopPrintPortalContent() {
     });
   };
 
-  // Pricing Calculation with Volume / Bulk Discounts
+  // Aggregate Page Counts Across All Files
+  const getAggregateVolumeStats = () => {
+    let totalBwPages = 0;
+    let totalColorPages = 0;
+
+    uploadedFiles.forEach(f => {
+      const pgs = f.selectedPages.length * f.printOptions.copies;
+      if (f.printOptions.colorMode === 'color') {
+        totalColorPages += pgs;
+      } else {
+        totalBwPages += pgs;
+      }
+    });
+
+    let bwDiscountPercent = 0;
+    let bwTier: any = null;
+    const bwTiers = shopSettings?.discount_rules?.bw_discounts;
+    if (Array.isArray(bwTiers) && bwTiers.length > 0) {
+      const sorted = [...bwTiers]
+        .filter(t => t && t.min_pages > 0 && t.discount_percent > 0 && totalBwPages >= t.min_pages)
+        .sort((a, b) => b.min_pages - a.min_pages);
+      if (sorted.length > 0) {
+        bwTier = sorted[0];
+        bwDiscountPercent = sorted[0].discount_percent;
+      }
+    }
+
+    let colorDiscountPercent = 0;
+    let colorTier: any = null;
+    const colorTiers = shopSettings?.discount_rules?.color_discounts;
+    if (Array.isArray(colorTiers) && colorTiers.length > 0) {
+      const sorted = [...colorTiers]
+        .filter(t => t && t.min_pages > 0 && t.discount_percent > 0 && totalColorPages >= t.min_pages)
+        .sort((a, b) => b.min_pages - a.min_pages);
+      if (sorted.length > 0) {
+        colorTier = sorted[0];
+        colorDiscountPercent = sorted[0].discount_percent;
+      }
+    }
+
+    return {
+      totalBwPages,
+      totalColorPages,
+      bwDiscountPercent,
+      bwTier,
+      colorDiscountPercent,
+      colorTier
+    };
+  };
+
+  // Pricing Calculation with Aggregate Volume / Bulk Discounts
   const calculatePricingDetails = (fileEntry: UploadedFileEntry) => {
     if (!shopSettings || !fileEntry || fileEntry.selectedPages.length === 0) {
       return { baseRate: 0, effectiveRate: 0, totalPages: 0, basePrice: 0, discountPercent: 0, discountAmount: 0, finalPrice: 0, tier: null };
@@ -253,23 +303,10 @@ export default function ShopPrintPortalContent() {
     const totalPages = fileEntry.selectedPages.length * fileEntry.printOptions.copies;
     const basePrice = effectiveRate * totalPages;
 
-    let discountPercent = 0;
-    let qualifyingTier: any = null;
-
-    const discountRules = shopSettings.discount_rules;
-    if (discountRules) {
-      const tierList = isColor ? discountRules.color_discounts : discountRules.bw_discounts;
-      if (Array.isArray(tierList) && tierList.length > 0) {
-        const sortedTiers = [...tierList]
-          .filter(t => t && t.min_pages > 0 && t.discount_percent > 0 && totalPages >= t.min_pages)
-          .sort((a, b) => b.min_pages - a.min_pages);
-
-        if (sortedTiers.length > 0) {
-          qualifyingTier = sortedTiers[0];
-          discountPercent = sortedTiers[0].discount_percent;
-        }
-      }
-    }
+    // Use aggregate discount percent across all files of same color mode
+    const aggStats = getAggregateVolumeStats();
+    const discountPercent = isColor ? aggStats.colorDiscountPercent : aggStats.bwDiscountPercent;
+    const qualifyingTier = isColor ? aggStats.colorTier : aggStats.bwTier;
 
     const discountAmount = (basePrice * discountPercent) / 100;
     const finalPrice = Math.max(0, basePrice - discountAmount);
@@ -742,10 +779,32 @@ export default function ShopPrintPortalContent() {
                     );
                   })}
 
-                  <div className="border-t border-gray-100 pt-4 flex justify-between items-center text-sm font-bold">
-                    <span className="text-gray-500">Order Total</span>
-                    <span className="text-xl font-black text-blue-600">₹{getEstimatedPrice().toFixed(2)}</span>
-                  </div>
+                  {(() => {
+                    const rawTotal = uploadedFiles.reduce((sum, f) => sum + calculatePricingDetails(f).basePrice, 0);
+                    const finalTotal = getEstimatedPrice();
+                    const totalSavings = rawTotal - finalTotal;
+
+                    return (
+                      <div className="border-t border-gray-100 pt-4 space-y-1.5">
+                        {totalSavings > 0.01 && (
+                          <div className="flex justify-between items-center text-xs font-semibold text-gray-500">
+                            <span>Subtotal (Standard Rate)</span>
+                            <span className="line-through">₹{rawTotal.toFixed(2)}</span>
+                          </div>
+                        )}
+                        {totalSavings > 0.01 && (
+                          <div className="flex justify-between items-center text-xs font-bold text-green-600 bg-green-50/80 px-2 py-1 rounded-lg">
+                            <span>Total Volume Savings</span>
+                            <span>-₹{totalSavings.toFixed(2)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center text-sm font-bold pt-1">
+                          <span className="text-gray-700">Order Total</span>
+                          <span className="text-xl font-black text-blue-600">₹{finalTotal.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* UPI Payment Panel */}
