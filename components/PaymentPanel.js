@@ -51,7 +51,7 @@ export default function PaymentPanel({ amount, onPaymentSuccess, onPaymentCancel
 
       // 3. Build Razorpay Standard checkout configurations
       const options = {
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        key: orderData.key_id || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         amount: orderData.amount,
         currency: orderData.currency,
         name: "PrintBolt Kiosk",
