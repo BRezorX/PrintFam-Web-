@@ -28,19 +28,22 @@ const mockJobs = new Map();
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 export async function getShopDetails(shopId) {
+  const match = typeof shopId === 'string' ? shopId.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/) : null;
+  const cleanShopId = match ? match[0] : shopId;
+
   if (isDemoMode || !supabase) {
     await delay(600);
-    const shop = mockShopSettings[shopId];
+    const shop = mockShopSettings[cleanShopId];
     if (shop) return shop;
     
     // Default fallback shop for local testing
     return {
-      user_id: shopId,
+      user_id: cleanShopId,
       shop_name: "Demo Print Centre",
       bw_price: 0.10,
       color_price: 0.50,
       duplex_price: 0.08,
-      qr_data: `http://localhost:3000/p/${shopId}`
+      qr_data: `http://localhost:3000/p/${cleanShopId}`
     };
   }
 
@@ -48,7 +51,7 @@ export async function getShopDetails(shopId) {
     const { data, error } = await supabase
       .from('shop_settings')
       .select('*')
-      .eq('user_id', shopId)
+      .eq('user_id', cleanShopId)
       .maybeSingle();
 
     if (error) throw error;
