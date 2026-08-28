@@ -339,6 +339,10 @@ export default function ShopPrintPortalContent() {
 
     try {
       const submitPromises = uploadedFiles.map(file => {
+        const sortedSelected = [...file.selectedPages].sort((a, b) => a - b);
+        const selectedPagesStr = sortedSelected.join(',');
+        const isAllSelected = file.selectedPages.length === file.totalPages;
+
         const jobPayload = {
           id: file.id,
           user_id: shopSettings.user_id,
@@ -349,6 +353,8 @@ export default function ShopPrintPortalContent() {
           duplex: file.printOptions.duplex,
           status: 'pending',
           pages: file.selectedPages.length,
+          selected_pages: selectedPagesStr,
+          page_range: isAllSelected ? 'all' : selectedPagesStr,
           amount: getFileEstimatedPrice(file)
         };
         return createPrintJob(jobPayload);
