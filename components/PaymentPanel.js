@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { CreditCard, CheckCircle2, AlertTriangle, Loader2, ArrowLeft, Smartphone, ShieldCheck } from 'lucide-react';
+import React, { useState } from 'react';
+import { CreditCard, CheckCircle2, AlertTriangle, Loader2, ArrowLeft, Zap, ShieldCheck } from 'lucide-react';
 
 // Dynamically inject Razorpay Checkout JS SDK into the document body on demand
 const loadRazorpayScript = () => {
@@ -21,40 +21,10 @@ export default function PaymentPanel({ amount, onPaymentSuccess, onPaymentCancel
   const [paymentStatus, setPaymentStatus] = useState('pending'); // pending, processing, success, failed
   const [loadingCheckout, setLoadingCheckout] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const [phone, setPhone] = useState('');
-  const [phoneError, setPhoneError] = useState('');
-
-  // Load saved customer phone from localStorage on mount
-  useEffect(() => {
-    try {
-      const savedPhone = localStorage.getItem('pb_customer_phone');
-      if (savedPhone && savedPhone.length === 10) {
-        setPhone(savedPhone);
-      }
-    } catch { }
-  }, []);
-
-  const handlePhoneChange = (e) => {
-    const val = e.target.value.replace(/\D/g, '').slice(0, 10);
-    setPhone(val);
-    if (phoneError) setPhoneError('');
-  };
 
   const handleRazorpayPayment = async () => {
-    // Validate phone number natively
-    const cleanPhone = phone.trim();
-    if (!cleanPhone || cleanPhone.length !== 10 || !/^[6-9]\d{9}$/.test(cleanPhone)) {
-      setPhoneError('Please enter a valid 10-digit Indian mobile number to proceed.');
-      return;
-    }
-
-    try {
-      localStorage.setItem('pb_customer_phone', cleanPhone);
-    } catch { }
-
     setLoadingCheckout(true);
     setErrorMsg('');
-    setPhoneError('');
     
     try {
       // 1. Load Razorpay script
@@ -79,7 +49,7 @@ export default function PaymentPanel({ amount, onPaymentSuccess, onPaymentCancel
         throw new Error(orderData.error || "Failed to generate payment transaction ID.");
       }
 
-      // 3. Build Razorpay Standard checkout configurations
+      // 3. Build Razorpay Standard checkout configurations with system prefill to bypass contact popups
       const options = {
         key: orderData.key_id || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         amount: orderData.amount,
@@ -121,8 +91,41 @@ export default function PaymentPanel({ amount, onPaymentSuccess, onPaymentCancel
         prefill: {
           name: "Print Customer",
           email: "customer@printbolt.store",
-          contact: `+91${cleanPhone}`,
+          contact: "+916000061991",
           method: "upi",
+        },
+        config: {
+          display: {
+            blocks: {
+              upi: {
+                name: "Pay using UPI (GPay / PhonePe / Paytm)",
+                instruments: [
+                  {
+                    method: "upi",
+                    flows: ["intent", "qr"]
+                  }
+                ]
+              },
+              other: {
+                name: "Cards / Netbanking",
+                instruments: [
+                  {
+                    method: "card"
+                  },
+                  {
+                    method: "netbanking"
+                  },
+                  {
+                    method: "wallet"
+                  }
+                ]
+              }
+            },
+            sequence: ["block.upi", "block.other"],
+            preferences: {
+              show_default_blocks: true
+            }
+          }
         },
         theme: {
           color: "#2563EB", // Brand color Blue
@@ -169,7 +172,7 @@ export default function PaymentPanel({ amount, onPaymentSuccess, onPaymentCancel
             <button onClick={onPaymentCancel} className="p-1.5 hover:bg-gray-100 rounded-lg transition text-gray-500">
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <h3 className="font-extrabold text-lg text-gray-800">Secure UPI Payment</h3>
+            <h3 className="font-extrabold text-lg text-gray-800">Direct UPI Payment</h3>
           </div>
 
           <div className="text-center bg-gray-50 rounded-2xl p-5 border border-gray-100">
@@ -177,51 +180,30 @@ export default function PaymentPanel({ amount, onPaymentSuccess, onPaymentCancel
             <span className="text-3xl font-black text-gray-900">₹{amount.toFixed(2)}</span>
           </div>
 
-          {/* Native Mobile Number Input (Never freezes, remembers customer) */}
-          <div className="space-y-1.5">
-            <label className="block text-xs font-extrabold text-gray-700">
-              Mobile Number (for UPI &amp; Receipt):
-            </label>
-            <div className={`flex items-center bg-white border ${phoneError ? 'border-red-400 ring-2 ring-red-100' : 'border-gray-300 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-100'} rounded-2xl overflow-hidden transition px-3.5 py-1`}>
-              <div className="flex items-center space-x-1.5 pr-2.5 border-r border-gray-200 text-gray-600 font-bold text-sm select-none">
-                <span>🇮🇳</span>
-                <span>+91</span>
-              </div>
-              <input
-                type="tel"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={10}
-                value={phone}
-                onChange={handlePhoneChange}
-                placeholder="Enter 10-digit mobile"
-                className="w-full pl-3 py-2 text-sm font-bold text-gray-900 outline-none bg-transparent placeholder-gray-400"
-              />
+          <div className="bg-blue-50/80 border border-blue-100 rounded-2xl p-3.5 text-xs text-blue-900 flex items-center space-x-2.5">
+            <div className="bg-blue-600 text-white p-1.5 rounded-lg flex-shrink-0">
+              <Zap className="w-4 h-4" />
             </div>
-            {phoneError ? (
-              <p className="text-[11px] font-bold text-red-500 pl-1">{phoneError}</p>
-            ) : (
-              <p className="text-[10px] text-gray-400 font-semibold pl-1 flex items-center space-x-1">
-                <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-                <span>Direct 1-tap checkout via GPay, PhonePe, Paytm or UPI</span>
-              </p>
-            )}
+            <div>
+              <p className="font-bold text-xs">Instant 1-Tap Checkout</p>
+              <p className="text-[11px] text-blue-700/80 mt-0.5">Pay seamlessly with Google Pay, PhonePe, Paytm, or any UPI app.</p>
+            </div>
           </div>
 
           <button
             onClick={handleRazorpayPayment}
             disabled={loadingCheckout}
-            className="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 text-white font-bold py-3.5 px-4 rounded-2xl shadow-lg transition duration-150 flex items-center justify-center space-x-2"
+            className="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 text-white font-bold py-4 px-4 rounded-2xl shadow-lg transition duration-150 flex items-center justify-center space-x-2 text-base"
           >
             {loadingCheckout ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                <span>Launching UPI Gateway...</span>
+                <span>Opening UPI Apps...</span>
               </>
             ) : (
               <>
                 <CreditCard className="w-5 h-5" />
-                <span>Pay ₹{amount.toFixed(2)} via UPI / Cards</span>
+                <span>Pay ₹{amount.toFixed(2)} with UPI (GPay / PhonePe)</span>
               </>
             )}
           </button>
