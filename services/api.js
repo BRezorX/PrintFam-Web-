@@ -161,7 +161,23 @@ export async function getJobStatus(jobId) {
       .maybeSingle();
 
     if (error) throw error;
-    return data;
+    if (data) return data;
+
+    // Fallback: Check print_audits if job was deleted after 5-minute completion window
+    const { data: auditData } = await supabase
+      .from('print_audits')
+      .select('*')
+      .eq('id', jobId)
+      .maybeSingle();
+
+    if (auditData) {
+      return {
+        ...auditData,
+        status: auditData.status || 'completed'
+      };
+    }
+
+    return null;
   } catch (error) {
     console.error("api.js: getJobStatus failed", error);
     throw error;
