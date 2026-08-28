@@ -181,11 +181,71 @@ export default function JobStatusContent() {
 
   const statusMsg = getOrderStatusMessage();
 
+  // Dynamic Print Duration Estimator
+  const getEstimatedWaitTimeSeconds = () => {
+    const uncompletedJobs = jobs.filter(j => j.status !== 'completed' && j.status !== 'failed');
+    if (uncompletedJobs.length === 0) return 0;
+
+    let totalSeconds = 0;
+    uncompletedJobs.forEach(j => {
+      const pgs = Math.max(1, parseInt(j.pages) || 1);
+      const cp = Math.max(1, parseInt(j.copies) || 1);
+      const isColor = !!j.color;
+      const rate = isColor ? 7 : 3; // ~7s per color page, ~3s per B&W page
+      totalSeconds += (pgs * cp * rate);
+    });
+
+    return Math.max(8, totalSeconds + 4); // Add 4s spooling buffer
+  };
+
+  const getQueuePositionText = () => {
+    const completed = jobs.filter(j => j.status === 'completed').length;
+    const printing = jobs.filter(j => j.status === 'printing').length;
+    const reprinting = jobs.filter(j => j.status === 'reprinting').length;
+    const pending = jobs.filter(j => j.status === 'pending').length;
+
+    if (completed === jobs.length && jobs.length > 0) {
+      return "All Pages Ready · Collect at Counter";
+    }
+    if (reprinting > 0) {
+      return "Reprinting Priority Queue · In Progress";
+    }
+    if (printing > 0) {
+      return `Currently Printing Document ${completed + 1} of ${jobs.length}`;
+    }
+    if (pending > 0) {
+      return `Position #1 in Queue · Starting shortly`;
+    }
+    return "Processing Print Request...";
+  };
+
+  const estSeconds = getEstimatedWaitTimeSeconds();
+  const queuePosText = getQueuePositionText();
+
   const totalAmountPaid = jobs.reduce((sum, j) => sum + (parseFloat(j.amount) || 0), 0);
   const formattedDate = new Date().toLocaleString('en-IN', {
     dateStyle: 'medium',
     timeStyle: 'short'
   });
+
+  // 1-Tap WhatsApp Receipt Share
+  const shareReceiptWhatsApp = () => {
+    let msg = `🧾 *PrintBolt Print Receipt*\n`;
+    msg += `📍 *Shop*: ${shopName || 'PrintBolt Partner Shop'}\n`;
+    msg += `📅 *Date*: ${formattedDate}\n`;
+    msg += `💳 *Amount Paid*: ₹${totalAmountPaid.toFixed(2)}\n`;
+    msg += `-----------------------------\n`;
+    jobs.forEach((j, i) => {
+      msg += `📄 *${i + 1}. ${j.file_name || 'Document'}*\n`;
+      msg += `   ${j.pages || 1} pgs × ${j.copies || 1} copies • ${j.color ? 'Color' : 'B&W'}\n`;
+    });
+    msg += `-----------------------------\n`;
+    msg += `✅ *Status*: Completed / Verified\n`;
+    msg += `🔗 *Self-Service Printing*: https://printbolt.store`;
+
+    const encoded = encodeURIComponent(msg);
+    window.open(`https://wa.me/?text=${encoded}`, '_blank');
+  };
 
   // Plaintext Receipt Downloader
   const downloadReceiptText = () => {
@@ -289,24 +349,79 @@ export default function JobStatusContent() {
               </p>
             </div>
 
-            {/* Quick Actions Bar (Download / Print Receipt) */}
-            <div className="flex items-center space-x-2 bg-blue-50/80 border border-blue-100 p-3 rounded-2xl">
-              <div className="bg-blue-600 text-white p-2 rounded-xl">
-                <Receipt className="w-4 h-4" />
+            {/* Live Wait-Time & Queue Position Widget */}
+            <div className="bg-gradient-to-br from-blue-900 to-indigo-950 text-white rounded-3xl p-5 shadow-lg border border-blue-800/50 space-y-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <span className="text-[10px] font-black tracking-widest text-blue-300 uppercase">Live Queue Tracker</span>
+                  <h3 className="text-base font-black mt-0.5 flex items-center space-x-2">
+                    <span className="relative flex h-3 w-3">
+                      {estSeconds > 0 && (
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                      )}
+                      <span className={`relative inline-flex rounded-full h-3 w-3 ${estSeconds > 0 ? 'bg-blue-400' : 'bg-green-400'}`}></span>
+                    </span>
+                    <span>{queuePosText}</span>
+                  </h3>
+                </div>
+                <div className="text-right">
+                  <span className="text-[9px] font-extrabold text-blue-300 uppercase block">Est. Print Time</span>
+                  <span className="text-lg font-black text-white">
+                    {estSeconds > 0 ? `~${estSeconds}s` : 'Ready ✅'}
+                  </span>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-extrabold text-blue-950 truncate">Transaction Receipt Ready</p>
-                <span className="text-[10px] text-blue-600 font-bold block">
-                  {totalAmountPaid > 0 ? `₹${totalAmountPaid.toFixed(2)} Paid • Verified` : 'Payment Confirmed'}
-                </span>
+
+              {/* Live animated progress bar */}
+              <div className="space-y-1.5">
+                <div className="w-full bg-blue-950/80 rounded-full h-2 overflow-hidden border border-blue-700/40">
+                  <div
+                    className={`h-full transition-all duration-700 rounded-full ${
+                      areAllJobsFinished() ? 'bg-green-400' : 'bg-gradient-to-r from-blue-400 to-cyan-300 animate-pulse'
+                    }`}
+                    style={{
+                      width: areAllJobsFinished()
+                        ? '100%'
+                        : `${Math.min(95, Math.max(20, (jobs.filter(j => j.status === 'completed').length / Math.max(1, jobs.length)) * 100))}%`
+                    }}
+                  ></div>
+                </div>
+                <div className="flex justify-between items-center text-[10px] text-blue-200 font-semibold px-0.5">
+                  <span>{jobs.filter(j => j.status === 'completed').length} of {jobs.length} files printed</span>
+                  <span>{areAllJobsFinished() ? '100% Complete' : 'Printing at Counter'}</span>
+                </div>
               </div>
-              <button
-                onClick={() => setShowReceiptModal(true)}
-                className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-extrabold px-3 py-2 rounded-xl transition shadow-sm flex items-center space-x-1"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                <span>View Receipt</span>
-              </button>
+            </div>
+
+            {/* Quick Actions Bar (Receipt View & WhatsApp Share) */}
+            <div className="bg-white border border-gray-200 p-4 rounded-3xl shadow-sm space-y-3">
+              <div className="flex items-center space-x-3">
+                <div className="bg-blue-50 text-blue-600 p-2.5 rounded-2xl">
+                  <Receipt className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-extrabold text-gray-900 truncate">Transaction Receipt Ready</p>
+                  <span className="text-[11px] text-gray-500 font-semibold block">
+                    {totalAmountPaid > 0 ? `₹${totalAmountPaid.toFixed(2)} Paid • Verified` : 'Payment Confirmed'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-1 border-t border-gray-100">
+                <button
+                  onClick={shareReceiptWhatsApp}
+                  className="bg-green-600 hover:bg-green-700 active:bg-green-800 text-white text-xs font-extrabold py-2.5 px-3 rounded-xl transition shadow-sm flex items-center justify-center space-x-1.5"
+                >
+                  <span>📲 WhatsApp</span>
+                </button>
+                <button
+                  onClick={() => setShowReceiptModal(true)}
+                  className="bg-blue-50 hover:bg-blue-100 active:bg-blue-200 text-blue-700 text-xs font-extrabold py-2.5 px-3 rounded-xl transition border border-blue-200 flex items-center justify-center space-x-1.5"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>View / Print</span>
+                </button>
+              </div>
             </div>
 
             {/* List of Job Tracking Cards */}
