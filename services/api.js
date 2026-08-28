@@ -80,25 +80,27 @@ export async function uploadPrintFile(shopId, file, onProgress) {
   }
 
   try {
-    const fileExt = file.name.split('.').pop();
+    const fileExt = file.name.split('.').pop() || 'pdf';
     const filePath = `${shopId}/${jobId}.${fileExt}`;
 
-    // Upload file to private bucket
+    // Upload file to bucket
     const { data, error } = await supabase.storage
       .from('print-files')
       .upload(filePath, file, {
         cacheControl: '3600',
+        contentType: file.type || 'application/pdf',
         upsert: true
       });
 
-    if (error) throw error;
+    if (error) {
+      console.error("Supabase upload error:", error);
+      throw error;
+    }
 
-    // Generate short-lived signed URL (Rule 5: Keep documents private)
-    const { data: signedData, error: signedError } = await supabase.storage
+    // Generate direct public URL
+    const { data: publicUrlData } = supabase.storage
       .from('print-files')
-      .createSignedUrl(filePath, 3600); // 1 hour validity
-
-    if (signedError) throw signedError;
+      .getPublicUrl(filePath);
 
     if (onProgress) onProgress(100);
 
@@ -106,7 +108,7 @@ export async function uploadPrintFile(shopId, file, onProgress) {
       jobId,
       fileName: file.name,
       fileSize: file.size,
-      fileUrl: signedData.signedUrl
+      fileUrl: publicUrlData.publicUrl
     };
   } catch (error) {
     console.error("api.js: uploadPrintFile failed", error);
