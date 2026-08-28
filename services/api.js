@@ -173,7 +173,7 @@ export function subscribeToJobStatus(jobId, onUpdate) {
       const job = mockJobs.get(jobId);
       if (job) {
         onUpdate(job);
-        if (job.status === 'completed' || job.status === 'failed') {
+        if (job.status === 'completed') {
           clearInterval(interval);
         }
       }
@@ -205,7 +205,7 @@ export function subscribeToJobStatus(jobId, onUpdate) {
       const job = await getJobStatus(jobId);
       if (job) {
         onUpdate(job);
-        if (job.status === 'completed' || job.status === 'failed') {
+        if (job.status === 'completed') {
           clearInterval(pollInterval);
         }
       }

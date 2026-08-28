@@ -114,36 +114,48 @@ export default function JobStatusContent() {
   const getProgressPercentage = (status: string) => {
     switch (status) {
       case 'pending': return 25;
-      case 'printing': return 65;
+      case 'needs_attention':
+      case 'interrupted': return 45;
+      case 'reprinting': return 65;
+      case 'printing': return 85;
       case 'completed': return 100;
-      default: return 0;
+      default: return 15;
     }
   };
 
   // Check if all jobs are finished
   const areAllJobsFinished = () => {
     if (jobs.length === 0) return false;
-    return jobs.every(j => j.status === 'completed' || j.status === 'failed');
+    return jobs.every(j => j.status === 'completed');
   };
 
   const getOrderStatusMessage = () => {
     const total = jobs.length;
     const completed = jobs.filter(j => j.status === 'completed').length;
     const printing = jobs.filter(j => j.status === 'printing').length;
+    const reprinting = jobs.filter(j => j.status === 'reprinting').length;
+    const needsAttention = jobs.filter(j => j.status === 'needs_attention' || j.status === 'interrupted').length;
     const failed = jobs.filter(j => j.status === 'failed').length;
 
     if (completed === total) {
       return {
-        title: "All Printing Complete!",
+        title: "All Printing Complete! ✅",
         desc: "All of your documents have been successfully printed. Please collect them from the counter.",
         color: "text-green-800"
       };
     }
-    if (failed === total) {
+    if (reprinting > 0) {
       return {
-        title: "Print Queue Error",
-        desc: "Printing failed for your files. Please contact counter support for help.",
-        color: "text-red-800"
+        title: "Reprinting in Progress... 🖨️",
+        desc: "The shopkeeper has initiated a reprint of your file. Your pages will output shortly.",
+        color: "text-blue-800"
+      };
+    }
+    if (needsAttention > 0) {
+      return {
+        title: "Shop Counter Checking Printer 🛡️",
+        desc: "Your file is safely preserved. The shopkeeper has been notified to check paper/ink state.",
+        color: "text-amber-800"
       };
     }
     if (printing > 0) {
@@ -151,6 +163,13 @@ export default function JobStatusContent() {
         title: "Printing in Progress...",
         desc: "The printer is currently outputting your pages. Please stay near the terminal.",
         color: "text-yellow-800"
+      };
+    }
+    if (failed === total) {
+      return {
+        title: "Counter Support Alerted",
+        desc: "Printer reported an issue. Your file is saved and the shopkeeper can reprint it for you.",
+        color: "text-red-800"
       };
     }
     return {
@@ -311,6 +330,16 @@ export default function JobStatusContent() {
                           Queued
                         </span>
                       )}
+                      {(jobItem.status === 'needs_attention' || jobItem.status === 'interrupted') && (
+                        <span className="text-[10px] font-black text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1 uppercase tracking-wide">
+                          Preserved • Shop Action
+                        </span>
+                      )}
+                      {jobItem.status === 'reprinting' && (
+                        <span className="text-[10px] font-black text-blue-600 bg-blue-50 border border-blue-200 rounded-full px-2.5 py-1 uppercase tracking-wide animate-pulse">
+                          Reprinting...
+                        </span>
+                      )}
                       {jobItem.status === 'printing' && (
                         <span className="text-[10px] font-black text-yellow-600 bg-yellow-50 border border-yellow-100 rounded-full px-2.5 py-1 uppercase tracking-wide animate-pulse">
                           Printing
@@ -323,7 +352,7 @@ export default function JobStatusContent() {
                       )}
                       {jobItem.status === 'failed' && (
                         <span className="text-[10px] font-black text-red-600 bg-red-50 border border-red-100 rounded-full px-2.5 py-1 uppercase tracking-wide">
-                          Failed
+                          Disrupted
                         </span>
                       )}
                     </div>
@@ -341,10 +370,22 @@ export default function JobStatusContent() {
                     </div>
                   )}
 
+                  {/* Hardware / Interruption Notification */}
+                  {(jobItem.status === 'needs_attention' || jobItem.status === 'interrupted') && (
+                    <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-3 text-xs text-amber-900 space-y-1">
+                      <p className="font-extrabold flex items-center space-x-1">
+                        <span>🛡️ Document Protected in Queue</span>
+                      </p>
+                      <p className="text-[11px] text-amber-800 leading-relaxed">
+                        {jobItem.error_message || "The printer requires attention at the shop. The shopkeeper has been notified and your file is retained safely."}
+                      </p>
+                    </div>
+                  )}
+
                   {/* Error detail */}
                   {jobItem.status === 'failed' && (
                     <p className="text-[11px] font-bold text-red-500 bg-red-50/50 rounded-xl p-2 border border-red-100">
-                      Error: {jobItem.error_message || "Failed at printer queue."}
+                      Issue: {jobItem.error_message || "Print failure detected. File is retained for manual assistance."}
                     </p>
                   )}
 
