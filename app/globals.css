@@ -2,15 +2,121 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Premium Light Theme: PrintBolt ── */
+:root {
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-body: 'DM Sans', 'Inter', system-ui, sans-serif;
+
+  /* Palette */
+  --pb-paper:       #FAF9F7;
+  --pb-paper-warm:  #F5F3EF;
+  --pb-paper-mid:   #EEECEA;
+  --pb-ink:         #1C1C1E;
+  --pb-ink-mid:     #3D3D40;
+  --pb-ink-soft:    #6B6B70;
+  --pb-ink-faint:   #9F9FA3;
+  --pb-accent:      #1D4ED8;
+  --pb-accent-mid:  #2563EB;
+  --pb-accent-light:#EFF6FF;
+  --pb-accent-warm: #DBEAFE;
+  --pb-border:      #E5E2DC;
+  --pb-border-mid:  #D4D0CA;
+  --pb-green:       #15803D;
+  --pb-green-light: #F0FDF4;
+  --pb-shadow-sm:   0 1px 3px rgba(28,28,30,0.06), 0 1px 2px rgba(28,28,30,0.04);
+  --pb-shadow-md:   0 4px 16px rgba(28,28,30,0.08), 0 2px 6px rgba(28,28,30,0.04);
+}
+
+/* Base reset */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
 body {
-  background-color: #F9FAFB;
-  color: #111827;
-  min-height: 100vh;
-  margin: 0;
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: var(--pb-paper);
+  color: var(--pb-ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* Typography system */
+.font-display { font-family: var(--font-display); }
+.font-body    { font-family: var(--font-body); }
+
+/* ── Marketing Page Animations ── */
+@keyframes pb-fade-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pb-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes pb-slide-right {
+  from { opacity: 0; transform: translateX(-16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pb-line-grow {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+
+/* Utility classes */
+.anim-fade-up {
+  animation: pb-fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.anim-fade-in {
+  animation: pb-fade-in 0.6s ease both;
+}
+.anim-delay-1 { animation-delay: 0.1s; }
+.anim-delay-2 { animation-delay: 0.2s; }
+.anim-delay-3 { animation-delay: 0.35s; }
+.anim-delay-4 { animation-delay: 0.5s; }
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Registration mark decorative element */
+.reg-mark {
+  position: relative;
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+}
+.reg-mark::before, .reg-mark::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--pb-border-mid);
+  border-radius: 50%;
+}
+.reg-mark::after {
+  inset: 6px;
+}
+
+/* Fine horizontal rule */
+.pb-rule {
+  border: none;
+  border-top: 1px solid var(--pb-border);
+}
+
+/* Custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar { width: 5px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: var(--pb-paper-mid); }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: var(--pb-border-mid); border-radius: 3px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--pb-ink-faint); }
+
 
 /* Custom scrollbar for preview grid */
 .custom-scrollbar::-webkit-scrollbar {

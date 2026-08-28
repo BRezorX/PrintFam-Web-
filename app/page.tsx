@@ -1,715 +1,447 @@
-'use client';
-
-import React, { useState, useEffect, useRef } from 'react';
+﻿'use client';
+import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
-import {
-  QrCode,
-  UploadCloud,
-  CreditCard,
-  Printer,
-  Zap,
-  ShieldCheck,
-  ArrowRight,
-  CheckCircle,
-  BarChart3,
-  Clock,
-  Smartphone,
-  Layers,
-  Menu,
-  X,
-  ChevronRight,
-} from 'lucide-react';
+import { Menu, X, ChevronRight, MessageCircle, Phone, Printer, Zap, Users, Clock, BarChart3, Monitor, Settings, CheckCircle, TrendingUp } from 'lucide-react';
 
-/* ─────────────────────────────────────────────
-   ANIMATED QR-TO-PRINT PIPELINE DIAGRAM
-───────────────────────────────────────────── */
-function PrintPipeline() {
-  const steps = [
-    { label: 'SCAN QR', sub: 'Customer scans shop code', icon: QrCode,      color: '#3b82f6' },
-    { label: 'UPLOAD',  sub: 'PDF in seconds',           icon: UploadCloud,  color: '#6366f1' },
-    { label: 'PAY',     sub: 'UPI / Razorpay',           icon: CreditCard,   color: '#8b5cf6' },
-    { label: 'PRINT',   sub: 'Auto-spools to printer',   icon: Printer,      color: '#06b6d4' },
-  ];
+const WA_LINK = 'https://wa.me/916000061991?text=Hi%20PrintBolt%2C%20interested%20in%20modernising%20my%20print%20shop.';
+const CALL_NUM = 'tel:+916000061991';
+const CALL_DISPLAY = '+91 60000 61991';
 
-  const [active, setActive] = useState(0);
+const NAV_LINKS = [
+  { label: 'How It Works', href: '#how-it-works' },
+  { label: 'Benefits', href: '#benefits' },
+  { label: 'For Shops', href: '#for-shops' },
+  { label: 'Why PrintBolt', href: '#why-printbolt' },
+  { label: 'Contact', href: '#contact' },
+];
 
-  useEffect(() => {
-    const t = setInterval(() => setActive(p => (p + 1) % steps.length), 1400);
-    return () => clearInterval(t);
-  }, [steps.length]);
-
+/* SectionLabel */
+function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="relative w-full max-w-[260px] mx-auto select-none" aria-hidden="true">
-      <div className="absolute left-[19px] top-8 bottom-8 w-px bg-gradient-to-b from-blue-500/40 via-indigo-500/40 to-cyan-500/40" />
-      <div
-        className="absolute left-[15px] w-[9px] h-[9px] rounded-full bg-blue-400 z-10"
-        style={{
-          top: `calc(${(active / (steps.length - 1)) * 85}% + 1.75rem)`,
-          transition: 'top 0.7s cubic-bezier(.22,1,.36,1)',
-          boxShadow: '0 0 10px 2px rgba(59,130,246,0.7)',
-        }}
-      />
-      <div className="space-y-6">
-        {steps.map((step, i) => {
-          const Icon = step.icon;
-          const isActive = i === active;
-          return (
-            <div key={i} className="flex items-start gap-4">
-              <div
-                className="relative flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center"
-                style={{
-                  border: `1px solid ${isActive ? step.color : 'rgba(255,255,255,0.08)'}`,
-                  background: isActive ? `${step.color}22` : 'rgba(255,255,255,0.04)',
-                  boxShadow: isActive ? `0 0 18px 4px ${step.color}44` : 'none',
-                  transition: 'all 0.5s',
-                }}
-              >
-                <Icon className="w-4 h-4" style={{ color: isActive ? step.color : '#6b7280', transition: 'color 0.3s' }} />
-              </div>
-              <div className="pt-2">
-                <div className="font-mono text-xs font-bold tracking-[0.18em]"
-                  style={{ color: isActive ? '#e2e8f0' : '#4b5563', transition: 'color 0.3s' }}>
-                  {step.label}
-                </div>
-                <div className="text-[11px] mt-0.5"
-                  style={{ color: isActive ? '#94a3b8' : '#374151', transition: 'color 0.3s' }}>
-                  {step.sub}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+      <div style={{ width: 20, height: 1, background: 'var(--pb-accent)' }} />
+      <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase' as const, color: 'var(--pb-accent)' }}>{children}</span>
     </div>
   );
 }
 
-/* ─────────────────────────────────────────────
-   ANIMATED STAT COUNTER
-───────────────────────────────────────────── */
-function StatCounter({ value, prefix = '', suffix = '', label }: {
-  value: number; prefix?: string; suffix?: string; label: string;
-}) {
-  const [display, setDisplay] = useState(0);
-  const ref = useRef<HTMLDivElement>(null);
-  const started = useRef(false);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !started.current) {
-          started.current = true;
-          if (value === 0) { setDisplay(0); return; }
-          let current = 0;
-          const step = value / 40;
-          const t = setInterval(() => {
-            current += step;
-            if (current >= value) { setDisplay(value); clearInterval(t); }
-            else setDisplay(Math.floor(current));
-          }, 30);
-        }
-      },
-      { threshold: 0.5 }
-    );
-    if (ref.current) observer.observe(ref.current);
-    return () => observer.disconnect();
-  }, [value]);
-
-  return (
-    <div ref={ref} className="text-center">
-      <div className="text-4xl md:text-5xl font-black tracking-tight text-white tabular-nums">
-        {prefix}{display}{suffix}
-      </div>
-      <div className="mt-1 text-xs font-semibold tracking-widest uppercase" style={{ color: '#64748b' }}>{label}</div>
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────────
-   WORKFLOW STEP TILE
-───────────────────────────────────────────── */
-function WorkflowStep({
-  num, icon: Icon, title, desc, color, delay,
-}: {
-  num: string; icon: React.ComponentType<any>; title: string;
-  desc: string; color: string; delay: string;
-}) {
-  return (
-    <div className={`pb-animate-fade-up ${delay} flex flex-col items-start`}>
-      <div className="flex items-center gap-3 w-full mb-5">
-        <span className="font-mono text-[11px] font-bold tracking-[0.2em]" style={{ color: '#64748b' }}>{num}</span>
-        <div className="h-px flex-1" style={{ background: 'rgba(255,255,255,0.08)' }} />
-      </div>
-      <div
-        className="w-11 h-11 rounded-xl flex items-center justify-center mb-4 flex-shrink-0"
-        style={{ background: `${color}18`, border: `1px solid ${color}44` }}
-      >
-        <Icon className="w-5 h-5" style={{ color }} />
-      </div>
-      <h3 className="text-base font-bold text-white mb-2">{title}</h3>
-      <p className="text-sm leading-relaxed" style={{ color: '#64748b' }}>{desc}</p>
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────────
-   MAIN PAGE
-───────────────────────────────────────────── */
-export default function HomePage() {
-  const [navOpen, setNavOpen] = useState(false);
+/* Nav */
+function Nav() {
+  const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-
   useEffect(() => {
-    const handler = () => setScrolled(window.scrollY > 24);
-    window.addEventListener('scroll', handler, { passive: true });
-    return () => window.removeEventListener('scroll', handler);
+    const onScroll = () => setScrolled(window.scrollY > 24);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
-
-  const scrollTo = (id: string) => {
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
-    setNavOpen(false);
+  const navStyle: React.CSSProperties = {
+    position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
+    background: scrolled ? 'rgba(250,249,247,0.96)' : 'transparent',
+    borderBottom: scrolled ? '1px solid var(--pb-border)' : '1px solid transparent',
+    backdropFilter: scrolled ? 'blur(12px)' : 'none',
+    transition: 'all 0.3s ease',
   };
-
+  const innerStyle: React.CSSProperties = {
+    maxWidth: 1200, margin: '0 auto', padding: '0 24px', height: 68,
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+  };
   return (
-    <div style={{ background: '#08090a', color: '#fff', minHeight: '100vh', overflowX: 'hidden' }}>
-
-      {/* ─── NAVIGATION ─── */}
-      <header
-        style={{
-          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50,
-          transition: 'background 0.3s, border-color 0.3s',
-          background: scrolled ? 'rgba(8,9,10,0.85)' : 'transparent',
-          backdropFilter: scrolled ? 'blur(16px)' : 'none',
-          WebkitBackdropFilter: scrolled ? 'blur(16px)' : 'none',
-          borderBottom: `1px solid ${scrolled ? 'rgba(255,255,255,0.07)' : 'transparent'}`,
-        }}
-      >
-        <div className="max-w-7xl mx-auto px-5 md:px-8 flex items-center justify-between" style={{ height: '64px' }}>
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: '#2563EB' }}>
-              <Zap className="w-3.5 h-3.5 text-white" />
-            </div>
-            <span className="font-black text-lg tracking-tight text-white">PrintBolt</span>
-          </div>
-
-          <nav className="hidden md:flex items-center gap-8">
-            {[
-              { id: 'how-it-works', label: 'How It Works' },
-              { id: 'features',     label: 'Features' },
-              { id: 'for-shops',    label: 'For Shops' },
-            ].map(({ id, label }) => (
-              <button key={id} onClick={() => scrollTo(id)}
-                className="text-sm font-medium transition-colors hover:text-white"
-                style={{ color: '#94a3b8' }}
-              >
-                {label}
-              </button>
-            ))}
-          </nav>
-
-          <div className="hidden md:flex items-center gap-3">
-            <Link href="/p" className="text-sm font-semibold hover:text-white transition-colors" style={{ color: '#94a3b8' }}>
-              Customer Portal
-            </Link>
-            <a href="mailto:hello@printbolt.store"
-              className="flex items-center gap-1.5 font-bold text-sm px-4 py-2 rounded-lg text-white hover:opacity-90 transition-opacity"
-              style={{ background: '#2563EB' }}
-            >
-              Get Started <ArrowRight className="w-3.5 h-3.5" />
+    <header style={navStyle}>
+      <nav style={innerStyle}>
+        <a href="#" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+          <Image src="/logo.jpg" alt="PrintBolt" width={36} height={36} style={{ borderRadius: 8, objectFit: 'contain' }} />
+          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 20, color: 'var(--pb-ink)', letterSpacing: '-0.02em' }}>PrintBolt</span>
+        </a>
+        <div className="pb-nav-links" style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
+          {NAV_LINKS.map(l => (
+            <a key={l.href} href={l.href} style={{ fontFamily: 'var(--font-body)', fontSize: 14, fontWeight: 500, color: 'var(--pb-ink-mid)', textDecoration: 'none' }}>{l.label}</a>
+          ))}
+        </div>
+        <div className="pb-nav-ctas" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <a href={CALL_NUM} style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, color: 'var(--pb-ink-mid)', textDecoration: 'none', padding: '8px 16px', border: '1px solid var(--pb-border)', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Phone className="w-3.5 h-3.5" /> Call
+          </a>
+          <a href={WA_LINK} target="_blank" rel="noopener noreferrer" style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 700, color: '#fff', textDecoration: 'none', padding: '8px 20px', background: 'var(--pb-accent)', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <MessageCircle className="w-3.5 h-3.5" /> WhatsApp Us
+          </a>
+        </div>
+        <button onClick={() => setOpen(!open)} className="pb-hamburger" style={{ display: 'none', background: 'none', border: 'none', cursor: 'pointer', padding: 8 }} aria-label="Toggle menu">
+          {open ? <X className="w-5 h-5" style={{ color: 'var(--pb-ink)' }} /> : <Menu className="w-5 h-5" style={{ color: 'var(--pb-ink)' }} />}
+        </button>
+      </nav>
+      {open && (
+        <div style={{ background: 'var(--pb-paper)', borderTop: '1px solid var(--pb-border)', padding: '20px 24px 28px' }}>
+          {NAV_LINKS.map(l => (
+            <a key={l.href} href={l.href} onClick={() => setOpen(false)} style={{ display: 'block', fontFamily: 'var(--font-body)', fontSize: 16, fontWeight: 500, color: 'var(--pb-ink)', textDecoration: 'none', padding: '12px 0', borderBottom: '1px solid var(--pb-border)' }}>{l.label}</a>
+          ))}
+          <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <a href={CALL_NUM} style={{ fontFamily: 'var(--font-body)', fontSize: 15, fontWeight: 600, color: 'var(--pb-accent)', textDecoration: 'none', padding: '12px 20px', border: '1px solid var(--pb-accent)', borderRadius: 10, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <Phone className="w-4 h-4" /> {CALL_DISPLAY}
+            </a>
+            <a href={WA_LINK} target="_blank" rel="noopener noreferrer" style={{ fontFamily: 'var(--font-body)', fontSize: 15, fontWeight: 700, color: '#fff', textDecoration: 'none', padding: '12px 20px', background: 'var(--pb-accent)', borderRadius: 10, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <MessageCircle className="w-4 h-4" /> WhatsApp Us
             </a>
           </div>
-
-          <button onClick={() => setNavOpen(!navOpen)} className="md:hidden hover:text-white transition-colors"
-            style={{ color: '#94a3b8' }} aria-label="Toggle menu">
-            {navOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
         </div>
+      )}
+      <style>{`
+        @media (max-width: 768px) { .pb-nav-links, .pb-nav-ctas { display: none !important; } .pb-hamburger { display: block !important; } }
+      `}</style>
+    </header>
+  );
+}
 
-        {navOpen && (
-          <div className="md:hidden px-5 pb-5 space-y-1"
-            style={{ background: '#0d0e10', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-            {[
-              { id: 'how-it-works', label: 'How It Works' },
-              { id: 'features',     label: 'Features' },
-              { id: 'for-shops',    label: 'For Shops' },
-            ].map(({ id, label }) => (
-              <button key={id} onClick={() => scrollTo(id)}
-                className="block w-full text-left text-sm font-medium py-3 hover:text-white transition-colors"
-                style={{ color: '#94a3b8' }}>
-                {label}
-              </button>
-            ))}
-            <Link href="/p" className="block text-sm font-semibold py-2" style={{ color: '#60a5fa' }}
-              onClick={() => setNavOpen(false)}>
-              Customer Portal &rarr;
-            </Link>
-          </div>
-        )}
-      </header>
-
-      {/* ─── HERO ─── */}
-      <section className="relative flex items-center pt-16 overflow-hidden" style={{ minHeight: '100vh' }}>
-        <div className="absolute inset-0 pointer-events-none" aria-hidden="true" style={{
-          backgroundImage: `linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)`,
-          backgroundSize: '80px 80px',
-          animation: 'pb-grid-pulse 6s ease-in-out infinite',
-        }} />
-        <div className="absolute pointer-events-none" aria-hidden="true" style={{
-          top: '10%', right: '15%', width: '600px', height: '600px', borderRadius: '50%',
-          background: 'radial-gradient(ellipse at center, rgba(37,99,235,0.12) 0%, transparent 70%)',
-        }} />
-
-        <div className="relative max-w-7xl mx-auto px-5 md:px-8 w-full py-16 md:py-24">
-          <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-
-            <div>
-              <div className="pb-animate-badge-pop inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 mb-8"
-                style={{ background: 'rgba(30,58,138,0.4)', border: '1px solid rgba(37,99,235,0.4)' }}>
-                <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#60a5fa' }} />
-                <span className="text-xs font-semibold tracking-wider uppercase" style={{ color: '#93c5fd' }}>
-                  Smart Print Automation
-                </span>
-              </div>
-
-              <h1 className="pb-animate-fade-up pb-delay-1 font-black tracking-tight leading-tight mb-6"
-                style={{ fontSize: 'clamp(2.8rem, 6vw, 4.5rem)', lineHeight: 1.03 }}>
-                <span className="text-white">Scan.</span><br />
-                <span className="text-white">Upload.</span><br />
-                <span className="text-white">Pay.</span><br />
-                <span className="pb-animate-fade-up pb-delay-2" style={{ color: '#3b82f6' }}>Print.</span>
-              </h1>
-
-              <p className="pb-animate-fade-up pb-delay-3 text-lg leading-relaxed max-w-lg mb-10"
-                style={{ color: '#94a3b8' }}>
-                PrintBolt turns any print shop into a self-service kiosk.
-                Customers scan, upload, and pay from their phone.
-                Print jobs spool automatically &mdash; no staff needed.
-              </p>
-
-              <div className="pb-animate-fade-up pb-delay-4 flex flex-col sm:flex-row gap-3">
-                <button onClick={() => scrollTo('how-it-works')}
-                  className="inline-flex items-center justify-center gap-2 font-bold text-sm px-6 py-3.5 rounded-lg text-white hover:opacity-90 transition-opacity"
-                  style={{ background: '#2563EB' }}>
-                  See How It Works <ChevronRight className="w-4 h-4" />
-                </button>
-                <Link href="/p"
-                  className="inline-flex items-center justify-center gap-2 font-semibold text-sm px-6 py-3.5 rounded-lg hover:border-white/25 transition-colors"
-                  style={{ border: '1px solid rgba(255,255,255,0.12)', color: '#cbd5e1' }}>
-                  Customer Portal
-                </Link>
-              </div>
-
-              <div className="pb-animate-fade-up pb-delay-5 flex flex-wrap items-center gap-5 mt-10 pt-8"
-                style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
-                {[
-                  { icon: ShieldCheck, text: 'Files auto-deleted after print' },
-                  { icon: Zap,         text: 'Sub-second queue delivery' },
-                  { icon: Smartphone,  text: 'No app required' },
-                ].map(({ icon: Icon, text }, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs" style={{ color: '#6b7280' }}>
-                    <Icon className="w-3.5 h-3.5" style={{ color: '#3b82f6' }} />
-                    <span>{text}</span>
+/* WorkflowVisual */
+function WorkflowVisual() {
+  const before = [
+    { label: 'Customer walks in with a USB', sub: 'File transfer takes time every time', icon: Users },
+    { label: 'Staff handles the file manually', sub: 'Prone to errors and delays', icon: Clock },
+    { label: 'Queue builds during peak hours', sub: 'Customers wait or walk out', icon: TrendingUp },
+  ];
+  const after = [
+    { label: 'Customer scans shop QR code', sub: 'From their own phone', icon: Printer },
+    { label: 'Job routes directly to printer', sub: 'No manual file transfer needed', icon: Zap },
+    { label: 'Faster service, happy customers', sub: 'You stay in full control', icon: CheckCircle },
+  ];
+  const colStyle = (accent: boolean): React.CSSProperties => ({
+    background: accent ? 'var(--pb-accent-light)' : 'var(--pb-paper-warm)',
+    border: accent ? '1px solid var(--pb-accent-warm)' : '1px solid var(--pb-border)',
+    borderRadius: 16, padding: '20px 18px',
+  });
+  const labelStyle = (accent: boolean): React.CSSProperties => ({
+    fontFamily: 'var(--font-body)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em',
+    textTransform: 'uppercase', color: accent ? 'var(--pb-accent)' : 'var(--pb-ink-faint)', marginBottom: 16,
+  });
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      {[{ items: before, accent: false, title: 'Before' }, { items: after, accent: true, title: 'With PrintBolt' }].map(col => (
+        <div key={col.title} style={colStyle(col.accent)}>
+          <div style={labelStyle(col.accent)}>{col.title}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {col.items.map((item, i) => {
+              const Icon = item.icon;
+              return (
+                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                  <div style={{ flexShrink: 0, width: 30, height: 30, borderRadius: 8, background: col.accent ? 'rgba(29,78,216,0.1)' : 'var(--pb-paper-mid)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon className="w-3.5 h-3.5" style={{ color: col.accent ? 'var(--pb-accent)' : 'var(--pb-ink-soft)' }} />
                   </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="pb-animate-fade-in pb-delay-3 flex justify-center lg:justify-end">
-              <div className="relative w-full max-w-sm rounded-2xl p-8" style={{
-                background: 'linear-gradient(135deg, #0f1117 0%, #13161e 100%)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                boxShadow: '0 0 80px 0 rgba(37,99,235,0.12)',
-              }}>
-                <div className="flex items-center justify-between mb-8">
                   <div>
-                    <div className="text-[10px] font-mono tracking-widest uppercase mb-1" style={{ color: '#374151' }}>
-                      Live Queue
-                    </div>
-                    <div className="text-sm font-bold text-white">Print Pipeline</div>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: '#34d399' }} />
-                    <span className="text-[10px] font-bold" style={{ color: '#34d399' }}>ONLINE</span>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600, color: col.accent ? 'var(--pb-ink)' : 'var(--pb-ink-mid)', lineHeight: 1.3 }}>{item.label}</div>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: col.accent ? 'var(--pb-ink-soft)' : 'var(--pb-ink-faint)', marginTop: 2 }}>{item.sub}</div>
                   </div>
                 </div>
-
-                <PrintPipeline />
-
-                <div className="mt-8 pt-5 flex items-center justify-between"
-                  style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div>
-                    <div className="text-xl font-black text-white tabular-nums">&lt; 3s</div>
-                    <div className="text-[10px] mt-0.5 uppercase tracking-wider" style={{ color: '#374151' }}>
-                      Queue to spool
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-xl font-black text-white">100%</div>
-                    <div className="text-[10px] mt-0.5 uppercase tracking-wider" style={{ color: '#374151' }}>
-                      Auto-managed
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+              );
+            })}
           </div>
         </div>
-      </section>
+      ))}
+    </div>
+  );
+}
 
-      {/* ─── STATS BAR ─── */}
-      <section className="py-16" style={{
-        background: '#0b0c0e',
-        borderTop: '1px solid rgba(255,255,255,0.05)',
-        borderBottom: '1px solid rgba(255,255,255,0.05)',
-      }}>
-        <div className="max-w-5xl mx-auto px-5 md:px-8 grid grid-cols-2 md:grid-cols-4 gap-10">
-          <StatCounter value={0}   prefix="&#8377;" suffix=""     label="Setup Cost" />
-          <StatCounter value={3}   suffix="s"                     label="Avg Queue Time" />
-          <StatCounter value={100} suffix="%"                     label="Serverless" />
-          <StatCounter value={0}   suffix=" Apps"                 label="Required to Install" />
-        </div>
-      </section>
-
-      {/* ─── HOW IT WORKS ─── */}
-      <section id="how-it-works" className="py-24 md:py-32" style={{ background: '#08090a' }}>
-        <div className="max-w-7xl mx-auto px-5 md:px-8">
-          <div className="mb-16">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="h-px w-8" style={{ background: '#2563EB' }} />
-              <span className="text-xs font-mono font-bold tracking-[0.25em] uppercase" style={{ color: '#3b82f6' }}>
-                Process
-              </span>
-            </div>
-            <h2 className="font-black tracking-tight text-white leading-tight mb-4"
-              style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}>
-              Four steps.<br />
-              <span style={{ color: '#64748b' }}>Zero friction.</span>
-            </h2>
-            <p className="max-w-md text-base leading-relaxed" style={{ color: '#64748b' }}>
-              From QR scan to printed page in under 60 seconds.
-              Customers never need an account, app, or queue number.
+/* Hero */
+function Hero() {
+  return (
+    <section style={{ paddingTop: 140, paddingBottom: 100, background: 'var(--pb-paper)', overflow: 'hidden', position: 'relative' }}>
+      <div aria-hidden="true" style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(var(--pb-border) 1px, transparent 1px), linear-gradient(90deg, var(--pb-border) 1px, transparent 1px)', backgroundSize: '60px 60px', opacity: 0.3, pointerEvents: 'none' }} />
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px', position: 'relative' }}>
+        <div className="pb-hero-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 72, alignItems: 'center' }}>
+          <div>
+            <SectionLabel>For Print Shop Owners</SectionLabel>
+            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(42px, 6vw, 72px)', fontWeight: 700, lineHeight: 1.08, letterSpacing: '-0.03em', color: 'var(--pb-ink)', marginBottom: 24 }}>
+              Your print shop,<br /><span style={{ color: 'var(--pb-accent)' }}>upgraded.</span>
+            </h1>
+            <p style={{ fontFamily: 'var(--font-body)', fontSize: 18, lineHeight: 1.7, color: 'var(--pb-ink-mid)', maxWidth: 480, marginBottom: 40 }}>
+              Turn your existing print shop into a faster, smarter, and more automated business — without replacing your current setup or hiring additional staff.
             </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-6">
-            <WorkflowStep num="01" icon={QrCode} title="Scan QR" color="#3b82f6" delay="pb-delay-1"
-              desc="The shop displays a unique PrintBolt QR code. Customers scan it — no link sharing, no typing URLs." />
-            <WorkflowStep num="02" icon={UploadCloud} title="Upload Document" color="#6366f1" delay="pb-delay-2"
-              desc="Upload any PDF directly from their phone. Select pages visually from thumbnail previews." />
-            <WorkflowStep num="03" icon={CreditCard} title="Pay Online" color="#8b5cf6" delay="pb-delay-3"
-              desc="Checkout via Razorpay. GPay, PhonePe, UPI — any method the customer prefers. No cash handling." />
-            <WorkflowStep num="04" icon={Printer} title="Auto Print" color="#06b6d4" delay="pb-delay-4"
-              desc="The job enters the queue instantly. The shop printer agent spools it automatically — no staff action required." />
-          </div>
-
-          <div className="hidden lg:flex items-center justify-between mt-6 px-4" aria-hidden="true">
-            {[0, 1, 2, 3].map(i => (
-              <React.Fragment key={i}>
-                <div className="w-5 h-5 rounded-full flex items-center justify-center"
-                  style={{ background: 'rgba(37,99,235,0.15)', border: '1px solid rgba(37,99,235,0.35)' }}>
-                  <div className="w-2 h-2 rounded-full" style={{ background: '#3b82f6' }} />
-                </div>
-                {i < 3 && (
-                  <div className="flex-1 flex items-center mx-2">
-                    <div className="h-px flex-1"
-                      style={{ background: 'linear-gradient(90deg, rgba(37,99,235,0.5), rgba(99,102,241,0.3))' }} />
-                    <ChevronRight className="w-3.5 h-3.5 -ml-1 flex-shrink-0" style={{ color: '#1e3a5f' }} />
-                  </div>
-                )}
-              </React.Fragment>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ─── FEATURES ─── */}
-      <section id="features" className="py-24 md:py-32"
-        style={{ background: '#0b0c0e', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-        <div className="max-w-7xl mx-auto px-5 md:px-8">
-          <div className="mb-16 flex flex-col md:flex-row md:items-end md:justify-between gap-6">
-            <div>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="h-px w-8" style={{ background: '#2563EB' }} />
-                <span className="text-xs font-mono font-bold tracking-[0.25em] uppercase" style={{ color: '#3b82f6' }}>
-                  Features
-                </span>
-              </div>
-              <h2 className="font-black tracking-tight text-white leading-tight"
-                style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}>
-                Built for speed.<br />
-                <span style={{ color: '#64748b' }}>Designed for trust.</span>
-              </h2>
-            </div>
-            <p className="max-w-sm text-sm leading-relaxed" style={{ color: '#64748b' }}>
-              Every feature solves a real problem in the print shop workflow.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[
-              { icon: Smartphone,  title: 'Zero App Friction', span: 'lg:col-span-2', accent: '#3b82f6',
-                desc: 'Works on any mobile browser. No downloads, no accounts, no passwords. Scan the QR and print in 60 seconds.' },
-              { icon: ShieldCheck, title: 'Auto File Deletion', span: '', accent: '#10b981',
-                desc: 'Documents are stored in encrypted private storage and signed URLs. Spooled files are permanently deleted after the print job completes.' },
-              { icon: Layers,      title: 'Visual Page Selection', span: '', accent: '#6366f1',
-                desc: 'Customers select pages from thumbnail grids or enter range syntax like "1-3, 5, 8-12". Never print the wrong pages again.' },
-              { icon: Zap,         title: 'Instant Hardware Polling', span: '', accent: '#f59e0b',
-                desc: 'The desktop print agent polls for new jobs in real time. Jobs spool the moment a printer comes online — no staff needed.' },
-              { icon: BarChart3,   title: 'Print History & Revenue Tracking', span: 'lg:col-span-2', accent: '#8b5cf6',
-                desc: 'Shop owners get a full queue history with per-job revenue. Monitor output, track print volumes, and audit every job.' },
-            ].map(({ icon: Icon, title, desc, span, accent }) => (
-              <div key={title} className={`${span} rounded-2xl p-6 md:p-7 flex flex-col gap-4 group cursor-default`}
-                style={{
-                  background: 'linear-gradient(135deg, #0f1015 0%, #111318 100%)',
-                  border: '1px solid rgba(255,255,255,0.07)',
-                  transition: 'border-color 0.3s',
-                }}>
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                  style={{ background: `${accent}16`, border: `1px solid ${accent}30` }}>
-                  <Icon className="w-5 h-5" style={{ color: accent }} />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-white mb-2 group-hover:text-blue-300 transition-colors">{title}</h3>
-                  <p className="text-sm leading-relaxed" style={{ color: '#64748b' }}>{desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ─── SECURITY CALLOUT ─── */}
-      <section className="py-16 md:py-20"
-        style={{ borderTop: '1px solid rgba(255,255,255,0.05)', background: '#08090a' }}>
-        <div className="max-w-7xl mx-auto px-5 md:px-8">
-          <div className="rounded-2xl overflow-hidden relative p-8 md:p-12 grid md:grid-cols-2 gap-10 items-center"
-            style={{
-              background: 'linear-gradient(135deg, #0c1528 0%, #0d1a3a 100%)',
-              border: '1px solid rgba(37,99,235,0.2)',
-            }}>
-            <div className="absolute inset-0 pointer-events-none" aria-hidden="true" style={{
-              backgroundImage: 'linear-gradient(rgba(59,130,246,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(59,130,246,0.4) 1px, transparent 1px)',
-              backgroundSize: '40px 40px', opacity: 0.05,
-            }} />
-            <div className="relative">
-              <div className="flex items-center gap-3 mb-5">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-                  style={{ background: 'rgba(37,99,235,0.2)', border: '1px solid rgba(37,99,235,0.4)' }}>
-                  <ShieldCheck className="w-5 h-5" style={{ color: '#60a5fa' }} />
-                </div>
-                <span className="text-xs font-mono font-bold tracking-widest uppercase" style={{ color: '#60a5fa' }}>
-                  Security First
-                </span>
-              </div>
-              <h2 className="font-black text-white tracking-tight leading-snug mb-4"
-                style={{ fontSize: 'clamp(1.6rem, 3.5vw, 2.5rem)' }}>
-                Documents are private.<br />
-                <span style={{ color: '#60a5fa' }}>Always.</span>
-              </h2>
-              <p className="text-sm leading-relaxed" style={{ color: '#94a3b8' }}>
-                Files are stored in private Supabase buckets, accessible only via short-lived signed URLs.
-                Once spooled to the printer, they are automatically and permanently deleted.
-                No one &mdash; not even PrintBolt &mdash; can access your documents after printing.
-              </p>
-            </div>
-            <div className="relative space-y-3">
-              {[
-                'Private cloud storage with encrypted signed URLs',
-                'Auto-deletion after successful print spool',
-                'No third-party data sharing',
-                'Zero document retention policy',
-              ].map((point, i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: '#3b82f6' }} />
-                  <span className="text-sm" style={{ color: '#cbd5e1' }}>{point}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── FOR SHOPS ─── */}
-      <section id="for-shops" className="py-24 md:py-32"
-        style={{ background: '#0b0c0e', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-        <div className="max-w-7xl mx-auto px-5 md:px-8">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
-            <div>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="h-px w-8" style={{ background: '#2563EB' }} />
-                <span className="text-xs font-mono font-bold tracking-[0.25em] uppercase" style={{ color: '#3b82f6' }}>
-                  For Print Shops
-                </span>
-              </div>
-              <h2 className="font-black tracking-tight text-white leading-tight mb-6"
-                style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}>
-                Your shop.<br />
-                <span style={{ color: '#64748b' }}>On autopilot.</span>
-              </h2>
-              <p className="text-base leading-relaxed mb-10" style={{ color: '#94a3b8' }}>
-                PrintBolt gives your shop a permanent QR code that customers scan to order directly.
-                You set your pricing. Payments go to you. The desktop agent handles everything else.
-              </p>
-              <div className="space-y-5">
-                {[
-                  { icon: QrCode,     title: 'Permanent Shop QR Code',    desc: 'One QR code links to your shop forever. Display it anywhere.' },
-                  { icon: CreditCard, title: 'Online Payments, Your Way', desc: 'Set B&W, colour, and duplex prices. Razorpay handles checkout.' },
-                  { icon: BarChart3,  title: 'Queue & History Dashboard', desc: 'See every job: who ordered, how many pages, how much revenue.' },
-                  { icon: Clock,      title: 'Reprint Any Job',           desc: 'Fetch any past job and reprint it instantly from the dashboard.' },
-                ].map(({ icon: Icon, title, desc }, i) => (
-                  <div key={i} className="flex gap-4">
-                    <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
-                      style={{ background: 'rgba(37,99,235,0.12)', border: '1px solid rgba(37,99,235,0.25)' }}>
-                      <Icon className="w-4 h-4" style={{ color: '#3b82f6' }} />
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold text-white mb-0.5">{title}</div>
-                      <div className="text-sm" style={{ color: '#64748b' }}>{desc}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <div className="rounded-2xl overflow-hidden" style={{
-                background: '#0f1015',
-                border: '1px solid rgba(255,255,255,0.08)',
-                boxShadow: '0 40px 80px rgba(0,0,0,0.6)',
-              }}>
-                <div className="px-4 py-3 flex items-center gap-2"
-                  style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: '#0c0d10' }}>
-                  <div className="w-3 h-3 rounded-full" style={{ background: 'rgba(239,68,68,0.6)' }} />
-                  <div className="w-3 h-3 rounded-full" style={{ background: 'rgba(234,179,8,0.6)' }} />
-                  <div className="w-3 h-3 rounded-full" style={{ background: 'rgba(34,197,94,0.6)' }} />
-                  <div className="ml-4 flex-1 rounded-md px-3 py-1 text-[11px]"
-                    style={{ background: 'rgba(255,255,255,0.04)', color: '#4b5563' }}>
-                    PrintBolt Shop Dashboard
-                  </div>
-                </div>
-                <div className="p-5 space-y-4">
-                  <div className="grid grid-cols-3 gap-3">
-                    {[{ label: 'Jobs Today', value: '24' }, { label: 'Revenue', value: '\u20B9312' }, { label: 'Queue', value: '2' }]
-                      .map(({ label, value }, i) => (
-                        <div key={i} className="rounded-xl p-3"
-                          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                          <div className="text-lg font-black text-white">{value}</div>
-                          <div className="text-[10px] mt-0.5 uppercase tracking-wider" style={{ color: '#374151' }}>{label}</div>
-                        </div>
-                      ))}
-                  </div>
-                  <div>
-                    <div className="text-[10px] uppercase tracking-widest font-bold mb-2" style={{ color: '#374151' }}>Active Queue</div>
-                    <div className="space-y-2">
-                      {[
-                        { name: 'Report_Final.pdf', pages: '12 pages', status: 'Printing', c: '#3b82f6' },
-                        { name: 'Invoice_Aug.pdf',  pages: '3 pages',  status: 'Queued',   c: '#f59e0b' },
-                      ].map(({ name, pages, status, c }, i) => (
-                        <div key={i} className="flex items-center justify-between rounded-xl px-4 py-3"
-                          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                          <div>
-                            <div className="text-xs font-semibold text-white">{name}</div>
-                            <div className="text-[10px] mt-0.5" style={{ color: '#374151' }}>{pages}</div>
-                          </div>
-                          <div className="text-[10px] font-bold px-2.5 py-1 rounded-full"
-                            style={{ color: c, background: `${c}18` }}>{status}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 rounded-xl px-4 py-3"
-                    style={{ background: 'rgba(37,99,235,0.08)', border: '1px solid rgba(37,99,235,0.2)' }}>
-                    <QrCode className="w-7 h-7 flex-shrink-0" style={{ color: '#3b82f6' }} />
-                    <div>
-                      <div className="text-xs font-bold text-white">Your Shop QR Code</div>
-                      <div className="text-[10px]" style={{ color: '#4b5563' }}>printbolt.store/p?shopId=your-id</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── CTA BANNER ─── */}
-      <section className="py-20" style={{ borderTop: '1px solid rgba(255,255,255,0.05)', background: '#08090a' }}>
-        <div className="max-w-4xl mx-auto px-5 md:px-8 text-center">
-          <div className="w-12 h-12 rounded-2xl mx-auto mb-6 flex items-center justify-center"
-            style={{ background: 'rgba(37,99,235,0.15)', border: '1px solid rgba(37,99,235,0.3)' }}>
-            <Zap className="w-6 h-6" style={{ color: '#60a5fa' }} />
-          </div>
-          <h2 className="font-black tracking-tight text-white mb-5" style={{ fontSize: 'clamp(2rem, 4.5vw, 3.2rem)' }}>
-            Ready to bolt?
-          </h2>
-          <p className="text-lg max-w-xl mx-auto mb-10" style={{ color: '#64748b' }}>
-            Set up your print shop in minutes. No hardware changes. No monthly fees to start.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <a href="mailto:hello@printbolt.store"
-              className="inline-flex items-center justify-center gap-2 font-bold text-sm px-8 py-4 rounded-xl text-white hover:opacity-90 transition-opacity"
-              style={{ background: '#2563EB' }}>
-              Contact Us to Get Started <ArrowRight className="w-4 h-4" />
-            </a>
-            <Link href="/p"
-              className="inline-flex items-center justify-center gap-2 font-semibold text-sm px-8 py-4 rounded-xl hover:text-white transition-colors"
-              style={{ border: '1px solid rgba(255,255,255,0.12)', color: '#cbd5e1' }}>
-              Customer Print Portal
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── FOOTER ─── */}
-      <footer className="py-12" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', background: '#06070a' }}>
-        <div className="max-w-7xl mx-auto px-5 md:px-8">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
-            <div>
-              <div className="flex items-center gap-2.5 mb-3">
-                <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: '#2563EB' }}>
-                  <Zap className="w-3 h-3 text-white" />
-                </div>
-                <span className="font-black text-base text-white">PrintBolt</span>
-              </div>
-              <p className="text-xs max-w-xs" style={{ color: '#374151' }}>
-                Smart self-service printing for modern print shops.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-6">
-              {[
-                { label: 'How It Works', fn: () => scrollTo('how-it-works') },
-                { label: 'Features',     fn: () => scrollTo('features') },
-                { label: 'For Shops',    fn: () => scrollTo('for-shops') },
-              ].map(({ label, fn }) => (
-                <button key={label} onClick={fn}
-                  className="text-xs hover:text-slate-300 transition-colors" style={{ color: '#374151' }}>
-                  {label}
-                </button>
-              ))}
-              <Link href="/p" className="text-xs hover:text-slate-300 transition-colors" style={{ color: '#374151' }}>
-                Customer Portal
-              </Link>
-              <a href="mailto:hello@printbolt.store"
-                className="text-xs hover:text-slate-300 transition-colors" style={{ color: '#374151' }}>
-                Contact
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <a href={WA_LINK} target="_blank" rel="noopener noreferrer" style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 15, color: '#fff', background: 'var(--pb-accent)', textDecoration: 'none', padding: '14px 28px', borderRadius: 10, display: 'inline-flex', alignItems: 'center', gap: 8, boxShadow: '0 2px 12px rgba(29,78,216,0.22)' }}>
+                <MessageCircle className="w-4 h-4" /> WhatsApp Us
+              </a>
+              <a href={CALL_NUM} style={{ fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 15, color: 'var(--pb-ink)', background: 'var(--pb-paper-warm)', textDecoration: 'none', padding: '14px 28px', borderRadius: 10, border: '1px solid var(--pb-border-mid)', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <Phone className="w-4 h-4" /> {CALL_DISPLAY}
               </a>
             </div>
-          </div>
-
-          <div className="mt-8 pt-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-3"
-            style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-            <p className="text-xs" style={{ color: '#1f2937' }}>
-              &copy; {new Date().getFullYear()} PrintBolt Automatic Printing System. All rights reserved.
-            </p>
-            <div className="flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5" style={{ color: '#1e3a5f' }} />
-              <span className="text-xs" style={{ color: '#1f2937' }}>SSL Secured &middot; Files auto-deleted after print</span>
+            <div style={{ marginTop: 36, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--pb-green)', fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600 }}>
+                <CheckCircle className="w-4 h-4" /> Works with your existing PC
+              </span>
+              <div style={{ width: 1, height: 14, background: 'var(--pb-border-mid)' }} />
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--pb-green)', fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600 }}>
+                <CheckCircle className="w-4 h-4" /> No new hardware needed
+              </span>
             </div>
           </div>
+          <div><WorkflowVisual /></div>
         </div>
-      </footer>
+      </div>
+      <style>{`@media (max-width: 768px) { .pb-hero-grid { grid-template-columns: 1fr !important; gap: 48px !important; } }`}</style>
+    </section>
+  );
+}
 
-    </div>
+/* WhyNow */
+function WhyNow() {
+  const pains = [
+    { n: '01', title: 'Constant file transfers', body: 'Customers arrive with USBs, phones, and email attachments. Your staff spends the first few minutes of every job just receiving the file.' },
+    { n: '02', title: 'Manual coordination slows you down', body: 'Every print job requires a conversation, a file transfer, a check. During peak hours, this bottleneck is the biggest drag on your throughput.' },
+    { n: '03', title: 'Queues build during busy periods', body: 'When multiple customers arrive at once, only one is being served. The others wait — and some will walk out.' },
+    { n: '04', title: 'Your PC is working below its potential', body: 'The shop computer already sits connected to your printer. With PrintBolt, it becomes the intelligent hub of your entire print workflow.' },
+    { n: '05', title: 'The print industry is changing', body: 'Customers increasingly expect faster, self-service experiences. Shops that adapt will serve more people with less friction.' },
+  ];
+  return (
+    <section id="why-printbolt" style={{ padding: '100px 24px', background: 'var(--pb-paper-warm)', borderTop: '1px solid var(--pb-border)', borderBottom: '1px solid var(--pb-border)' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+        <div className="pb-why-grid" style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: 80, alignItems: 'start' }}>
+          <div>
+            <SectionLabel>The Problem</SectionLabel>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(30px, 4vw, 46px)', fontWeight: 700, lineHeight: 1.15, letterSpacing: '-0.025em', color: 'var(--pb-ink)', marginBottom: 20 }}>
+              Traditional print shops are still operating manually.
+            </h2>
+            <p style={{ fontFamily: 'var(--font-body)', fontSize: 16, lineHeight: 1.7, color: 'var(--pb-ink-mid)', marginBottom: 32 }}>
+              Most neighbourhood print shops are highly skilled at printing — but the process of receiving jobs and handling files remains entirely manual.
+            </p>
+            <div style={{ padding: '20px 24px', background: 'var(--pb-accent-light)', border: '1px solid var(--pb-accent-warm)', borderRadius: 12 }}>
+              <p style={{ fontFamily: 'var(--font-display)', fontSize: 17, fontStyle: 'italic', fontWeight: 600, color: 'var(--pb-ink)', lineHeight: 1.55 }}>
+                &ldquo;PrintBolt is the modernisation layer your shop needs — installed on the computer you already have.&rdquo;
+              </p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            {pains.map((pain, i) => (
+              <div key={pain.n} style={{ display: 'flex', gap: 24, padding: '28px 0', borderBottom: i < pains.length - 1 ? '1px solid var(--pb-border)' : 'none', alignItems: 'flex-start' }}>
+                <span style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 700, color: 'var(--pb-ink-faint)', letterSpacing: '0.06em', flexShrink: 0, marginTop: 4 }}>{pain.n}</span>
+                <div>
+                  <h3 style={{ fontFamily: 'var(--font-body)', fontSize: 17, fontWeight: 700, color: 'var(--pb-ink)', marginBottom: 8, lineHeight: 1.3 }}>{pain.title}</h3>
+                  <p style={{ fontFamily: 'var(--font-body)', fontSize: 15, lineHeight: 1.65, color: 'var(--pb-ink-mid)' }}>{pain.body}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <style>{`@media (max-width: 900px) { .pb-why-grid { grid-template-columns: 1fr !important; gap: 40px !important; } }`}</style>
+    </section>
+  );
+}
+
+/* HowItWorks */
+function HowItWorks() {
+  const steps = [
+    { n: '01', label: 'Install', desc: 'Download and install PrintBolt on your existing shop PC. The setup takes minutes and does not require any technical expertise.' },
+    { n: '02', label: 'Set Up', desc: 'Configure your pricing, print preferences, and shop profile. PrintBolt generates your unique shop link for customers.' },
+    { n: '03', label: 'Go Live', desc: 'Display your PrintBolt QR code at your counter. Customers submit jobs from their phones — no USB or file transfer required.' },
+    { n: '04', label: 'Manage', desc: 'Jobs queue automatically on your PC. Review, approve, and print. Your dashboard shows active jobs, revenue, and history.' },
+  ];
+  return (
+    <section id="how-it-works" style={{ padding: '100px 24px', background: 'var(--pb-paper)' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+        <div style={{ textAlign: 'center', marginBottom: 64 }}>
+          <SectionLabel>How It Works</SectionLabel>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(30px, 4vw, 46px)', fontWeight: 700, letterSpacing: '-0.025em', color: 'var(--pb-ink)', marginTop: 4 }}>
+            From installation to first print job<br />in under an hour.
+          </h2>
+        </div>
+        <div className="pb-steps-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'var(--pb-border)', border: '1px solid var(--pb-border)', borderRadius: 16, overflow: 'hidden' }}>
+          {steps.map((step) => (
+            <div key={step.n} style={{ background: 'var(--pb-paper)', padding: '36px 28px' }}>
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--pb-accent)', textTransform: 'uppercase' as const, marginBottom: 20 }}>{step.n}</div>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: 'var(--pb-ink)', marginBottom: 14, letterSpacing: '-0.01em' }}>{step.label}</h3>
+              <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, lineHeight: 1.7, color: 'var(--pb-ink-mid)' }}>{step.desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      <style>{`
+        @media (max-width: 900px) { .pb-steps-grid { grid-template-columns: 1fr 1fr !important; } }
+        @media (max-width: 560px) { .pb-steps-grid { grid-template-columns: 1fr !important; } }
+      `}</style>
+    </section>
+  );
+}
+
+/* Benefits */
+function Benefits() {
+  const items = [
+    { icon: Monitor, title: 'Works with your existing PC', desc: 'No new hardware purchase required. PrintBolt runs on the Windows computer already connected to your printer.' },
+    { icon: Clock, title: 'Reduce repetitive manual work', desc: 'Stop manually transferring files from every customer. Print jobs arrive digitally, directly to your queue.' },
+    { icon: Users, title: 'Handle more customers efficiently', desc: 'Multiple customers can submit jobs simultaneously. You stay focused on printing, not file management.' },
+    { icon: Zap, title: 'Faster customer experience', desc: 'From file submission to print in minutes. Customers appreciate the speed and will return.' },
+    { icon: BarChart3, title: 'Full visibility into your business', desc: 'Track completed jobs, revenue, and print history in a built-in dashboard. Always know where your shop stands.' },
+    { icon: Settings, title: 'You stay in complete control', desc: 'Set your own pricing. Approve jobs before printing. PrintBolt works around your existing workflow.' },
+  ];
+  return (
+    <section id="benefits" style={{ padding: '100px 24px', background: 'var(--pb-paper-warm)', borderTop: '1px solid var(--pb-border)' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+        <div style={{ marginBottom: 56 }}>
+          <SectionLabel>Benefits</SectionLabel>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(30px, 4vw, 46px)', fontWeight: 700, letterSpacing: '-0.025em', color: 'var(--pb-ink)', marginTop: 4, maxWidth: 560 }}>
+            Built for the practical needs of a real print shop.
+          </h2>
+        </div>
+        <div className="pb-benefits-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, background: 'var(--pb-border)' }}>
+          {items.map((b, i) => {
+            const Icon = b.icon;
+            return (
+              <div key={i} style={{ background: 'var(--pb-paper)', padding: '32px 28px' }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--pb-accent-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
+                  <Icon className="w-5 h-5" style={{ color: 'var(--pb-accent)' }} />
+                </div>
+                <h3 style={{ fontFamily: 'var(--font-body)', fontSize: 16, fontWeight: 700, color: 'var(--pb-ink)', marginBottom: 10, lineHeight: 1.3 }}>{b.title}</h3>
+                <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, lineHeight: 1.65, color: 'var(--pb-ink-mid)' }}>{b.desc}</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <style>{`
+        @media (max-width: 900px) { .pb-benefits-grid { grid-template-columns: 1fr 1fr !important; } }
+        @media (max-width: 560px) { .pb-benefits-grid { grid-template-columns: 1fr !important; } }
+      `}</style>
+    </section>
+  );
+}
+
+/* ForShops */
+function ForShops() {
+  const types = [
+    'Xerox and photocopy shops',
+    'Digital printing centres',
+    'Document printing shops',
+    'Small commercial print businesses',
+    'College area print shops',
+    'Local stationery and print shops',
+  ];
+  return (
+    <section id="for-shops" style={{ padding: '100px 24px', background: 'var(--pb-ink)' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+        <div className="pb-shops-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 80, alignItems: 'center' }}>
+          <div>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+              <div style={{ width: 20, height: 1, background: '#93c5fd' }} />
+              <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase' as const, color: '#93c5fd' }}>For Print Shops</span>
+            </div>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(30px, 4vw, 48px)', fontWeight: 700, letterSpacing: '-0.025em', color: '#F8F8F5', lineHeight: 1.15, marginBottom: 24 }}>
+              PrintBolt is designed for shops like yours.
+            </h2>
+            <p style={{ fontFamily: 'var(--font-body)', fontSize: 16, lineHeight: 1.7, color: '#9CA3AF', marginBottom: 36 }}>
+              Whether you run a small neighbourhood print shop or a busy document centre near a college or office hub, PrintBolt was built for the Indian print shop context.
+            </p>
+            <a href={WA_LINK} target="_blank" rel="noopener noreferrer" style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 15, color: 'var(--pb-ink)', background: '#F8F8F5', textDecoration: 'none', padding: '14px 28px', borderRadius: 10, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <MessageCircle className="w-4 h-4" /> Talk to Us on WhatsApp
+            </a>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {types.map((t, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '20px 0', borderBottom: i < types.length - 1 ? '1px solid rgba(255,255,255,0.08)' : 'none' }}>
+                <CheckCircle className="w-4 h-4" style={{ color: '#60a5fa', flexShrink: 0 }} />
+                <span style={{ fontFamily: 'var(--font-body)', fontSize: 16, fontWeight: 500, color: '#D1D5DB' }}>{t}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <style>{`@media (max-width: 768px) { .pb-shops-grid { grid-template-columns: 1fr !important; gap: 48px !important; } }`}</style>
+    </section>
+  );
+}
+
+/* FinalCTA */
+function FinalCTA() {
+  return (
+    <section id="contact" style={{ padding: '100px 24px', background: 'var(--pb-paper)', borderTop: '1px solid var(--pb-border)' }}>
+      <div style={{ maxWidth: 680, margin: '0 auto', textAlign: 'center' }}>
+        <div aria-hidden="true" style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 32 }}>
+          {[0,1,2,3,4].map(i => <div key={i} style={{ width: 4, height: 4, borderRadius: '50%', background: i === 2 ? 'var(--pb-accent)' : 'var(--pb-border-mid)' }} />)}
+        </div>
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(32px, 5vw, 54px)', fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--pb-ink)', lineHeight: 1.1, marginBottom: 20 }}>
+          Ready to modernise your print shop?
+        </h2>
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: 17, lineHeight: 1.7, color: 'var(--pb-ink-mid)', marginBottom: 44 }}>
+          Talk to the PrintBolt team today. We will walk you through the setup, answer your questions, and help you get started without any disruption to your current operations.
+        </p>
+        <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <a href={WA_LINK} target="_blank" rel="noopener noreferrer" style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 16, color: '#fff', background: 'var(--pb-accent)', textDecoration: 'none', padding: '16px 32px', borderRadius: 12, display: 'inline-flex', alignItems: 'center', gap: 8, boxShadow: '0 2px 16px rgba(29,78,216,0.25)' }}>
+            <MessageCircle className="w-5 h-5" /> WhatsApp Us
+          </a>
+          <a href={CALL_NUM} style={{ fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 16, color: 'var(--pb-ink)', background: 'var(--pb-paper-warm)', textDecoration: 'none', padding: '16px 32px', borderRadius: 12, border: '1px solid var(--pb-border-mid)', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <Phone className="w-5 h-5" /> {CALL_DISPLAY}
+          </a>
+        </div>
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--pb-ink-faint)', marginTop: 28 }}>
+          Available Monday – Saturday, 10 AM – 7 PM IST
+        </p>
+      </div>
+    </section>
+  );
+}
+
+/* Footer */
+function Footer() {
+  return (
+    <footer style={{ background: 'var(--pb-paper-warm)', borderTop: '1px solid var(--pb-border)', padding: '64px 24px 40px' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+        <div className="pb-footer-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 48, marginBottom: 56 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+              <Image src="/logo.jpg" alt="PrintBolt" width={32} height={32} style={{ borderRadius: 7, objectFit: 'contain' }} />
+              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, color: 'var(--pb-ink)', letterSpacing: '-0.02em' }}>PrintBolt</span>
+            </div>
+            <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, lineHeight: 1.65, color: 'var(--pb-ink-mid)', maxWidth: 280 }}>
+              The modern operating system for neighbourhood print shops across India.
+            </p>
+          </div>
+          <div>
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' as const, color: 'var(--pb-ink-faint)', marginBottom: 16 }}>Navigation</div>
+            {NAV_LINKS.map(l => (
+              <a key={l.href} href={l.href} style={{ display: 'block', fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--pb-ink-mid)', textDecoration: 'none', marginBottom: 10 }}>{l.label}</a>
+            ))}
+          </div>
+          <div>
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' as const, color: 'var(--pb-ink-faint)', marginBottom: 16 }}>Legal</div>
+            <Link href="/privacy" style={{ display: 'block', fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--pb-ink-mid)', textDecoration: 'none', marginBottom: 10 }}>Privacy Policy</Link>
+            <Link href="/terms" style={{ display: 'block', fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--pb-ink-mid)', textDecoration: 'none', marginBottom: 10 }}>Terms of Service</Link>
+          </div>
+          <div>
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' as const, color: 'var(--pb-ink-faint)', marginBottom: 16 }}>Contact</div>
+            <a href={WA_LINK} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--pb-ink-mid)', textDecoration: 'none', marginBottom: 10 }}>
+              <MessageCircle className="w-4 h-4" /> WhatsApp Us
+            </a>
+            <a href={CALL_NUM} style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--pb-ink-mid)', textDecoration: 'none' }}>
+              <Phone className="w-4 h-4" /> {CALL_DISPLAY}
+            </a>
+          </div>
+        </div>
+        <div style={{ borderTop: '1px solid var(--pb-border)', paddingTop: 28, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+          <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--pb-ink-faint)' }}>
+            &copy; 2026 PrintBolt. All rights reserved.
+          </p>
+          <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--pb-ink-faint)' }}>
+            Made for Indian print shops.
+          </p>
+        </div>
+      </div>
+      <style>{`
+        @media (max-width: 768px) { .pb-footer-grid { grid-template-columns: 1fr 1fr !important; gap: 32px !important; } }
+        @media (max-width: 480px) { .pb-footer-grid { grid-template-columns: 1fr !important; } }
+      `}</style>
+    </footer>
+  );
+}
+
+/* HomePage */
+export default function HomePage() {
+  return (
+    <main style={{ background: 'var(--pb-paper)' }}>
+      <Nav />
+      <Hero />
+      <WhyNow />
+      <HowItWorks />
+      <Benefits />
+      <ForShops />
+      <FinalCTA />
+      <Footer />
+    </main>
   );
 }
