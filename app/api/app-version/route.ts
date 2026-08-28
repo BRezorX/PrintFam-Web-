@@ -4,9 +4,9 @@ export const runtime = 'edge';
 
 export async function GET() {
   return NextResponse.json({
-    version: '1.4.3',
+    version: '1.4.4',
     downloadUrl: 'https://printbolt.store/downloads/PrintShopAgent.exe',
-    releaseNotes: 'PrintBolt Agent v1.4.3 - Custom page range printing: spool only customer-selected pages (e.g. Page 2 of 3) to prevent waste.',
+    releaseNotes: 'PrintBolt Agent v1.4.4 - Restore native PDFium high-definition print rendering engine with selective page support and rate-limited diagnostic alerts.',
     mandatory: false,
   });
 }
