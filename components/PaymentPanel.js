@@ -91,19 +91,16 @@ export default function PaymentPanel({ amount, onPaymentSuccess, onPaymentCancel
         prefill: {
           name: "Print Customer",
           email: "customer@printbolt.store",
-          contact: "+919876543210",
+          contact: "9876543210",
         },
-        readonly: {
-          contact: true,
-          email: true,
-          name: true,
-        },
-        send_sms_hash: false,
-        remember_customer: false,
         theme: {
           color: "#2563EB", // Brand color Blue
         },
         modal: {
+          backdropclose: false,
+          escape: true,
+          handleback: true,
+          confirm_close: false,
           ondismiss: function () {
             setLoadingCheckout(false);
           }
