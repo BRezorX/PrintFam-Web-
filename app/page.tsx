@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -50,7 +50,7 @@ function Nav() {
     <header style={navStyle}>
       <nav style={innerStyle}>
         <a href="#" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-          <Image src="/logo.jpg" alt="PrintBolt" width={36} height={36} style={{ borderRadius: 8, objectFit: 'contain' }} />
+          <Image src="/logo.png" alt="PrintBolt" width={36} height={36} style={{ borderRadius: 8, objectFit: 'contain' }} />
           <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 20, color: 'var(--pb-ink)', letterSpacing: '-0.02em' }}>PrintBolt</span>
         </a>
         <div className="pb-nav-links" style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
@@ -385,7 +385,7 @@ function Footer() {
         <div className="pb-footer-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 48, marginBottom: 56 }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-              <Image src="/logo.jpg" alt="PrintBolt" width={32} height={32} style={{ borderRadius: 7, objectFit: 'contain' }} />
+              <Image src="/logo.png" alt="PrintBolt" width={32} height={32} style={{ borderRadius: 7, objectFit: 'contain' }} />
               <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, color: 'var(--pb-ink)', letterSpacing: '-0.02em' }}>PrintBolt</span>
             </div>
             <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, lineHeight: 1.65, color: 'var(--pb-ink-mid)', maxWidth: 280 }}>

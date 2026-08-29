@@ -7,12 +7,12 @@ export default function AppShell({ children, shopName, email, maxWidth = 'max-w-
       {/* Header Banner */}
       <header className="sticky top-0 z-40 w-full bg-white border-b border-gray-100 shadow-sm">
         <div className="max-w-md mx-auto px-4 py-3 flex justify-between items-center">
-          <div className="flex items-center space-x-2">
-            <div className="bg-blue-600 text-white p-1.5 rounded-lg">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-              </svg>
-            </div>
+          <div className="flex items-center space-x-2.5">
+            <img
+              src="/logo.png"
+              alt="PrintBolt"
+              className="w-8 h-8 rounded-lg object-contain"
+            />
             <div>
               <span className="font-extrabold text-lg tracking-tight text-gray-900 block leading-none">PrintBolt</span>
               {shopName && <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{shopName}</span>}
