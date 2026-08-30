@@ -4,9 +4,9 @@ export const runtime = 'edge';
 
 export async function GET() {
   return NextResponse.json({
-    version: '1.4.14',
+    version: '1.4.15',
     downloadUrl: 'https://printbolt.store/downloads/PrintShopAgent.exe',
-    releaseNotes: 'PrintBolt Agent v1.4.14 - Support 6 to 8 digit OTP recovery codes seamlessly.',
+    releaseNotes: 'PrintBolt Agent v1.4.15 - Simplified order completion status page: Transaction Receipt card, Live Queue Tracker, and Done button.',
     mandatory: false,
   });
 }

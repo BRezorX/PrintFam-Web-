@@ -337,19 +337,84 @@ export default function JobStatusContent() {
             </button>
           </div>
         ) : (
-          <div className="flex-1 flex flex-col justify-between py-2 space-y-6">
+          <div className="flex-1 flex flex-col justify-between py-2 space-y-4 max-w-md mx-auto w-full">
             
-            {/* Global Order Status Header */}
-            <div className="text-center py-2 border-b border-gray-100 pb-4">
-              <h2 className={`text-lg font-black ${statusMsg.color} leading-snug`}>
+            {/* 1. Global Order Status Header */}
+            <div className="text-center pt-1 pb-1">
+              <h2 className={`text-xl font-black ${statusMsg.color} leading-tight`}>
                 {statusMsg.title}
               </h2>
-              <p className="text-xs text-gray-400 font-semibold mt-1 max-w-[280px] mx-auto leading-relaxed">
+              <p className="text-xs text-gray-500 font-semibold mt-1">
                 {statusMsg.desc}
               </p>
             </div>
 
-            {/* Live Wait-Time & Queue Position Widget */}
+            {/* 2. TRANSACTION RECEIPT CARD */}
+            <div className="bg-white border border-gray-200/90 rounded-3xl p-5 shadow-sm space-y-4">
+              <div className="flex justify-between items-start border-b border-gray-100 pb-3">
+                <div className="flex items-center space-x-2.5">
+                  <div className="bg-blue-50 text-blue-600 p-2.5 rounded-2xl">
+                    <Receipt className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black text-blue-600 uppercase tracking-wider block">Transaction Receipt</span>
+                    <span className="text-xs font-black text-gray-900 font-mono">
+                      Order ID: #{jobs[0]?.id ? jobs[0].id.slice(0, 8).toUpperCase() : (jobId?.slice(0, 8).toUpperCase() || 'PB-ORDER')}
+                    </span>
+                  </div>
+                </div>
+                <span className="inline-flex items-center space-x-1 bg-green-50 border border-green-200/80 text-green-700 text-[11px] font-black px-2.5 py-1 rounded-full">
+                  <CheckCircle2 className="w-3 h-3 text-green-600" />
+                  <span>PAID</span>
+                </span>
+              </div>
+
+              {/* Receipt Summary Details */}
+              <div className="space-y-2 text-xs">
+                <div className="flex justify-between items-center text-gray-600">
+                  <span className="font-semibold text-gray-500">Shop</span>
+                  <span className="font-extrabold text-gray-900">{shopName || 'PrintBolt Partner Shop'}</span>
+                </div>
+                
+                <div className="flex justify-between items-start text-gray-600">
+                  <span className="font-semibold text-gray-500">Print Type</span>
+                  <div className="text-right">
+                    {jobs.map((j, idx) => (
+                      <div key={j.id || idx} className="font-extrabold text-gray-900 truncate max-w-[210px]">
+                        {j.file_name && j.file_name !== 'Retrieving file details...' ? j.file_name : `Document ${idx + 1}`}
+                        <span className="text-[10px] text-gray-500 font-bold block">
+                          {j.pages || 1} pg{(j.pages || 1) > 1 ? 's' : ''} × {j.copies || 1} cpy • {j.color ? 'Color' : 'B&W'}{j.duplex ? ' • Duplex' : ''}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center text-gray-600 pt-2 border-t border-gray-100">
+                  <span className="font-bold text-gray-700">Total Amount</span>
+                  <span className="text-base font-black text-blue-600">₹{totalAmountPaid.toFixed(2)}</span>
+                </div>
+              </div>
+
+              {/* Receipt Quick Buttons */}
+              <div className="grid grid-cols-2 gap-2 pt-1 border-t border-gray-100">
+                <button
+                  onClick={shareReceiptWhatsApp}
+                  className="bg-green-600 hover:bg-green-700 active:bg-green-800 text-white text-xs font-extrabold py-2.5 px-3 rounded-xl transition shadow-sm flex items-center justify-center space-x-1.5"
+                >
+                  <span>📲 WhatsApp</span>
+                </button>
+                <button
+                  onClick={() => setShowReceiptModal(true)}
+                  className="bg-blue-50 hover:bg-blue-100 active:bg-blue-200 text-blue-700 text-xs font-extrabold py-2.5 px-3 rounded-xl transition border border-blue-200 flex items-center justify-center space-x-1.5"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>View / Print</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 3. LIVE QUEUE TRACKER CARD */}
             <div className="bg-gradient-to-br from-blue-900 to-indigo-950 text-white rounded-3xl p-5 shadow-lg border border-blue-800/50 space-y-4">
               <div className="flex justify-between items-start">
                 <div>
@@ -374,7 +439,7 @@ export default function JobStatusContent() {
 
               {/* Live animated progress bar */}
               <div className="space-y-1.5">
-                <div className="w-full bg-blue-950/80 rounded-full h-2 overflow-hidden border border-blue-700/40">
+                <div className="w-full bg-blue-950/80 rounded-full h-2.5 overflow-hidden border border-blue-700/40">
                   <div
                     className={`h-full transition-all duration-700 rounded-full ${
                       areAllJobsFinished() ? 'bg-green-400' : 'bg-gradient-to-r from-blue-400 to-cyan-300 animate-pulse'
@@ -386,140 +451,25 @@ export default function JobStatusContent() {
                     }}
                   ></div>
                 </div>
-                <div className="flex justify-between items-center text-[10px] text-blue-200 font-semibold px-0.5">
-                  <span>{jobs.filter(j => j.status === 'completed').length} of {jobs.length} files printed</span>
-                  <span>{areAllJobsFinished() ? '100% Complete' : 'Printing at Counter'}</span>
+                <div className="flex justify-between items-center text-[11px] text-blue-200 font-semibold px-0.5">
+                  <span>{jobs.filter(j => j.status === 'completed').length} of {jobs.length} file{jobs.length > 1 ? 's' : ''} printed</span>
+                  <span className="font-extrabold text-white">{areAllJobsFinished() ? '100% Complete' : 'Printing at Counter'}</span>
                 </div>
               </div>
             </div>
 
-            {/* Quick Actions Bar (Receipt View & WhatsApp Share) */}
-            <div className="bg-white border border-gray-200 p-4 rounded-3xl shadow-sm space-y-3">
-              <div className="flex items-center space-x-3">
-                <div className="bg-blue-50 text-blue-600 p-2.5 rounded-2xl">
-                  <Receipt className="w-5 h-5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-extrabold text-gray-900 truncate">Transaction Receipt Ready</p>
-                  <span className="text-[11px] text-gray-500 font-semibold block">
-                    {totalAmountPaid > 0 ? `₹${totalAmountPaid.toFixed(2)} Paid • Verified` : 'Payment Confirmed'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 pt-1 border-t border-gray-100">
-                <button
-                  onClick={shareReceiptWhatsApp}
-                  className="bg-green-600 hover:bg-green-700 active:bg-green-800 text-white text-xs font-extrabold py-2.5 px-3 rounded-xl transition shadow-sm flex items-center justify-center space-x-1.5"
-                >
-                  <span>📲 WhatsApp</span>
-                </button>
-                <button
-                  onClick={() => setShowReceiptModal(true)}
-                  className="bg-blue-50 hover:bg-blue-100 active:bg-blue-200 text-blue-700 text-xs font-extrabold py-2.5 px-3 rounded-xl transition border border-blue-200 flex items-center justify-center space-x-1.5"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>View / Print</span>
-                </button>
-              </div>
-            </div>
-
-            {/* List of Job Tracking Cards */}
-            <div className="space-y-4 flex-1">
-              {jobs.map((jobItem) => (
-                <div key={jobItem.id} className="bg-white border border-gray-200 rounded-3xl p-5 shadow-sm space-y-4">
-                  
-                  {/* File Metadata */}
-                  <div className="flex justify-between items-start">
-                    <div className="overflow-hidden pr-4 max-w-[70%]">
-                      <h4 className="text-sm font-extrabold text-gray-800 truncate">{jobItem.file_name}</h4>
-                      <p className="text-[10px] text-gray-400 font-bold uppercase mt-0.5">
-                        Copies: {jobItem.copies} • {jobItem.color ? 'Color' : 'B&W'} {jobItem.duplex && '• Duplex'}
-                      </p>
-                    </div>
-                    
-                    {/* Status Badge */}
-                    <div className="flex-shrink-0">
-                      {jobItem.status === 'pending' && (
-                        <span className="text-[10px] font-black text-blue-600 bg-blue-50 border border-blue-100 rounded-full px-2.5 py-1 uppercase tracking-wide">
-                          Queued
-                        </span>
-                      )}
-                      {(jobItem.status === 'needs_attention' || jobItem.status === 'interrupted') && (
-                        <span className="text-[10px] font-black text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1 uppercase tracking-wide">
-                          Preserved • Shop Action
-                        </span>
-                      )}
-                      {jobItem.status === 'reprinting' && (
-                        <span className="text-[10px] font-black text-blue-600 bg-blue-50 border border-blue-200 rounded-full px-2.5 py-1 uppercase tracking-wide animate-pulse">
-                          Reprinting...
-                        </span>
-                      )}
-                      {jobItem.status === 'printing' && (
-                        <span className="text-[10px] font-black text-yellow-600 bg-yellow-50 border border-yellow-100 rounded-full px-2.5 py-1 uppercase tracking-wide animate-pulse">
-                          Printing
-                        </span>
-                      )}
-                      {jobItem.status === 'completed' && (
-                        <span className="text-[10px] font-black text-green-600 bg-green-50 border border-green-100 rounded-full px-2.5 py-1 uppercase tracking-wide">
-                          Ready
-                        </span>
-                      )}
-                      {jobItem.status === 'failed' && (
-                        <span className="text-[10px] font-black text-red-600 bg-red-50 border border-red-100 rounded-full px-2.5 py-1 uppercase tracking-wide">
-                          Disrupted
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Individual Progress indicator */}
-                  {jobItem.status !== 'failed' && (
-                    <div className="space-y-1.5">
-                      <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
-                        <div
-                          className="bg-green-500 h-full rounded-full transition-all duration-500"
-                          style={{ width: `${getProgressPercentage(jobItem.status)}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Hardware / Interruption Notification */}
-                  {(jobItem.status === 'needs_attention' || jobItem.status === 'interrupted') && (
-                    <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-3 text-xs text-amber-900 space-y-1">
-                      <p className="font-extrabold flex items-center space-x-1">
-                        <span>🛡️ Document Protected in Queue</span>
-                      </p>
-                      <p className="text-[11px] text-amber-800 leading-relaxed">
-                        {jobItem.error_message || "The printer requires attention at the shop. The shopkeeper has been notified and your file is retained safely."}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Error detail */}
-                  {jobItem.status === 'failed' && (
-                    <p className="text-[11px] font-bold text-red-500 bg-red-50/50 rounded-xl p-2 border border-red-100">
-                      Issue: {jobItem.error_message || "Print failure detected. File is retained for manual assistance."}
-                    </p>
-                  )}
-
-                </div>
-              ))}
-            </div>
-
-            {/* Bottom Actions Button Bar */}
-            <div className="pt-4 space-y-2">
+            {/* 4. DONE BUTTON */}
+            <div className="pt-2">
               <button
                 onClick={handleDone}
-                className={`w-full text-white font-extrabold text-sm py-4 rounded-2xl shadow-md transition flex items-center justify-center space-x-1 ${
+                className={`w-full text-white font-extrabold text-base py-4 rounded-2xl shadow-lg transition flex items-center justify-center space-x-2 ${
                   areAllJobsFinished() 
                     ? 'bg-green-600 hover:bg-green-700 active:bg-green-800' 
-                    : 'bg-gray-500 hover:bg-gray-600 active:bg-gray-700'
+                    : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800'
                 }`}
               >
-                <span>{areAllJobsFinished() ? 'Done' : 'Go Back to Shop'}</span>
-                <ArrowRight className="w-4 h-4" />
+                <span>Done</span>
+                <ArrowRight className="w-5 h-5" />
               </button>
             </div>
 
