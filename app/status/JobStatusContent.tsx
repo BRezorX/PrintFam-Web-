@@ -152,6 +152,14 @@ export default function JobStatusContent() {
       };
     }
     if (needsAttention > 0) {
+      const duplexJob = jobs.find(j => (j.status === 'needs_attention' || j.status === 'interrupted') && j.error_message && j.error_message.includes('Manual Duplex'));
+      if (duplexJob) {
+        return {
+          title: "Flipping Paper for 2-Sided Print 📄",
+          desc: "Front side complete! The shopkeeper is turning over the paper to print the back side.",
+          color: "text-blue-800"
+        };
+      }
       return {
         title: "Shop Counter Checking Printer 🛡️",
         desc: "Your file is safely preserved. The shopkeeper has been notified to check paper/ink state.",
@@ -206,6 +214,9 @@ export default function JobStatusContent() {
 
     if (completed === jobs.length && jobs.length > 0) {
       return "All Pages Ready · Collect at Counter";
+    }
+    if (jobs.some(j => (j.status === 'needs_attention' || j.status === 'interrupted') && j.error_message && j.error_message.includes('Manual Duplex'))) {
+      return "Manual Duplex · Flipping Paper for Back Side";
     }
     if (reprinting > 0) {
       return "Reprinting Priority Queue · In Progress";

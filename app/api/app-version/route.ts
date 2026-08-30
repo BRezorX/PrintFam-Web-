@@ -4,9 +4,9 @@ export const runtime = 'edge';
 
 export async function GET() {
   return NextResponse.json({
-    version: '1.4.15',
+    version: '1.4.16',
     downloadUrl: 'https://printbolt.store/downloads/PrintShopAgent.exe',
-    releaseNotes: 'PrintBolt Agent v1.4.15 - Simplified order completion status page: Transaction Receipt card, Live Queue Tracker, and Done button.',
+    releaseNotes: 'PrintBolt Agent v1.4.16 - Smart Double-Sided (Duplex) printing: Segmented Single/Double UI toggle, automatic hardware duplex support, manual duplex paper-flip pause & resume workflow with audible alerts.',
     mandatory: false,
   });
 }

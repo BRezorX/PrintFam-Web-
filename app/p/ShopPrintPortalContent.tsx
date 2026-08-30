@@ -294,12 +294,13 @@ export default function ShopPrintPortalContent() {
       return { baseRate: 0, effectiveRate: 0, totalPages: 0, basePrice: 0, discountPercent: 0, discountAmount: 0, finalPrice: 0, tier: null };
     }
 
-    const bwRate = parseFloat(shopSettings.bw_price || 0.10);
-    const colorRate = parseFloat(shopSettings.color_price || 0.50);
-    const duplexRate = parseFloat(shopSettings.duplex_price || 0.08);
-
+    const bwRate = parseFloat(shopSettings.bw_price || 2.0);
+    const colorRate = parseFloat(shopSettings.color_price || 10.0);
     const isColor = fileEntry.printOptions.colorMode === 'color';
     const baseRate = isColor ? colorRate : bwRate;
+    const duplexRate = (shopSettings.duplex_price && parseFloat(shopSettings.duplex_price) > 0)
+      ? parseFloat(shopSettings.duplex_price)
+      : baseRate;
     const effectiveRate = fileEntry.printOptions.duplex ? duplexRate : baseRate;
 
     const totalPages = fileEntry.selectedPages.length * fileEntry.printOptions.copies;
@@ -645,19 +646,32 @@ export default function ShopPrintPortalContent() {
                         {/* Duplex Toggle */}
                         <div>
                           <span className="block text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">Sides</span>
-                          <button
-                            onClick={() => handleUpdateOption(idx, 'duplex', !fileEntry.printOptions.duplex)}
-                            disabled={!shopSettings.duplex_price}
-                            className={`w-full py-1.5 px-2 border rounded-lg text-center text-[10px] font-bold transition ${
-                              !shopSettings.duplex_price
-                                ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
-                                : fileEntry.printOptions.duplex
-                                ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                            }`}
-                          >
-                            {!shopSettings.duplex_price ? 'Unavailable' : fileEntry.printOptions.duplex ? 'Double-Sided' : 'Single-Sided'}
-                          </button>
+                          <div className="grid grid-cols-2 gap-1 bg-gray-100 p-0.5 rounded-lg">
+                            <button
+                              onClick={() => handleUpdateOption(idx, 'duplex', false)}
+                              className={`py-1 rounded-md text-[10px] font-bold transition ${
+                                !fileEntry.printOptions.duplex
+                                  ? 'bg-white text-gray-800 shadow-sm'
+                                  : 'text-gray-500 hover:text-gray-800'
+                              }`}
+                            >
+                              Single
+                            </button>
+                            <button
+                              onClick={() => handleUpdateOption(idx, 'duplex', true)}
+                              disabled={fileEntry.selectedPages.length <= 1}
+                              title={fileEntry.selectedPages.length <= 1 ? "Double-sided requires at least 2 pages" : ""}
+                              className={`py-1 rounded-md text-[10px] font-bold transition ${
+                                fileEntry.selectedPages.length <= 1
+                                  ? 'opacity-40 cursor-not-allowed text-gray-400'
+                                  : fileEntry.printOptions.duplex
+                                  ? 'bg-white text-blue-600 shadow-sm'
+                                  : 'text-gray-500 hover:text-gray-800'
+                              }`}
+                            >
+                              Double
+                            </button>
+                          </div>
                         </div>
 
                         {/* Copies counter */}
