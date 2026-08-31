@@ -55,8 +55,8 @@ RUN fc-cache -f -v
 # Switch back to gotenberg unprivileged user for security
 USER gotenberg
 
-# Expose default Gotenberg port
+# Expose default Gotenberg port (3000)
 EXPOSE 3000
 
-# Start Gotenberg with optimal settings for Google Cloud Run (1 vCPU, 1 GB RAM)
-CMD ["gotenberg", "--api-listen=0.0.0.0:3000", "--libreoffice-auto-restart=true", "--libreoffice-restart-after=30"]
+# Start Gotenberg v8 (automatically binds to 0.0.0.0:3000 and respects PORT env)
+CMD ["gotenberg", "--libreoffice-restart-after=30"]
