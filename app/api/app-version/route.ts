@@ -4,9 +4,9 @@ export const runtime = 'edge';
 
 export async function GET() {
   return NextResponse.json({
-    version: '1.4.20',
+    version: '1.4.21',
     downloadUrl: 'https://printbolt.store/downloads/PrintShopAgent.exe',
-    releaseNotes: 'PrintBolt Agent v1.4.20 - 100% Standalone Single-File Executable: Embedded assemblies, native PDF rendering engine, and cloud configuration directly inside PrintShopAgent.exe. Can be shared directly as a single .exe file.',
+    releaseNotes: 'PrintBolt Agent v1.4.21 - Optimize standalone single-file binary size: GZip-compressed embedded native PDF rendering engines (size reduced from 29.8MB to 14.5MB), perfectly within Cloudflare Pages 25MB limit.',
     mandatory: false,
   });
 }
