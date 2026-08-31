@@ -88,7 +88,56 @@ async function convertOfficeDocumentToPdf(
 ): Promise<Uint8Array> {
   const ext = fileName.split('.').pop()?.toLowerCase() || 'docx';
 
-  // Strategy 1: Dedicated Converter Microservice / Gotenberg
+  // Strategy 1: Self-Hosted Google Cloud Run / Firebase Font Engine (with full MS TrueType fonts)
+  const fontEngineUrl = process.env.DOC_CONVERTER_URL || process.env.NEXT_PUBLIC_DOC_CONVERTER_URL;
+  if (fontEngineUrl) {
+    try {
+      const endpoint = fontEngineUrl.replace(/\/$/, '') + '/forms/libreoffice/convert';
+      const formData = new FormData();
+      const blob = new Blob([fileBytes], { type: 'application/octet-stream' });
+      formData.append('files', blob, fileName);
+
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (resp.ok) {
+        const arrayBuffer = await resp.arrayBuffer();
+        return new Uint8Array(arrayBuffer);
+      }
+    } catch (e) {
+      console.warn('Private Font Engine conversion failed, attempting next strategy...', e);
+    }
+  }
+
+  // Strategy 2: ConvertAPI (if configured via CONVERT_API_SECRET)
+  const convertApiSecret = process.env.CONVERT_API_SECRET;
+  if (convertApiSecret) {
+    try {
+      const resp = await fetch(`https://v2.convertapi.com/convert/${ext}/to/pdf?secret=${convertApiSecret}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream', 'File-Name': fileName },
+        body: fileBytes,
+      });
+
+      if (resp.ok) {
+        const json: any = await resp.json();
+        if (json.Files && json.Files.length > 0 && json.Files[0].FileData) {
+          const binaryString = atob(json.Files[0].FileData);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          return bytes;
+        }
+      }
+    } catch (e) {
+      console.warn('ConvertAPI conversion failed, attempting fallback...', e);
+    }
+  }
+
+  // Strategy 3: Public Microservice Engine
   try {
     const formData = new FormData();
     const blob = new Blob([fileBytes], { type: 'application/octet-stream' });
@@ -104,10 +153,10 @@ async function convertOfficeDocumentToPdf(
       return new Uint8Array(arrayBuffer);
     }
   } catch (e) {
-    console.warn('Microservice conversion failed, using fallback synthesizer...', e);
+    console.warn('Public conversion fallback failed, using synthesizer...', e);
   }
 
-  // Strategy 2: Fallback Document Synthesizer (Ensures safe handling)
+  // Strategy 4: Fallback Document Synthesizer
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([595.28, 841.89]); // Standard A4 (Points)
   
