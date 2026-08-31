@@ -49,6 +49,9 @@ RUN cd /tmp && \
     cp *.ttf *.TTF /usr/share/fonts/truetype/msttcorefonts/ 2>/dev/null || true && \
     rm -rf /tmp/webfonts* /tmp/msfonts
 
+# Copy complete Microsoft Office & Windows 10/11 TrueType Fonts (Agency FB, Candara, Calibri, Segoe UI, Aptos, etc.)
+COPY fonts/ /usr/share/fonts/truetype/windows/
+
 # Rebuild font cache so LibreOffice discovers all installed fonts instantly
 RUN fc-cache -f -v
 
