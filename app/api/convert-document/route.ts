@@ -88,8 +88,8 @@ async function convertOfficeDocumentToPdf(
 ): Promise<Uint8Array> {
   const ext = fileName.split('.').pop()?.toLowerCase() || 'docx';
 
-  // Strategy 1: Self-Hosted Google Cloud Run / Firebase Font Engine (with full MS TrueType fonts)
-  const fontEngineUrl = process.env.DOC_CONVERTER_URL || process.env.NEXT_PUBLIC_DOC_CONVERTER_URL;
+  // Strategy 1: Self-Hosted Font Engine (with full MS TrueType fonts)
+  const fontEngineUrl = process.env.DOC_CONVERTER_URL || process.env.NEXT_PUBLIC_DOC_CONVERTER_URL || 'https://printbolt-font-engine.onrender.com';
   if (fontEngineUrl) {
     try {
       const endpoint = fontEngineUrl.replace(/\/$/, '') + '/forms/libreoffice/convert';
