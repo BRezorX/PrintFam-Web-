@@ -55,8 +55,9 @@ RUN fc-cache -f -v
 # Switch back to gotenberg unprivileged user for security
 USER gotenberg
 
-# Expose default Gotenberg port (3000)
-EXPOSE 3000
+# Set default port to 10000 (matches Render & Cloud web service standard)
+ENV GOTENBERG_API_PORT=10000
+EXPOSE 10000
 
-# Start Gotenberg v8 (automatically binds to 0.0.0.0:3000 and respects PORT env)
-CMD ["gotenberg", "--libreoffice-restart-after=30"]
+# Start Gotenberg v8 on port 10000
+CMD ["gotenberg", "--api-port=10000", "--libreoffice-restart-after=30"]
