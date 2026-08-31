@@ -238,19 +238,41 @@ export function subscribeToJobStatus(jobId, onUpdate) {
   };
 }
 
-// Background simulation helper for Demo Mode
-async function simulateDemoPrinting(jobId) {
-  await delay(5000); // 5s waiting in queue
-  const job1 = mockJobs.get(jobId);
-  if (job1 && job1.status === 'pending') {
-    job1.status = 'printing';
-    mockJobs.set(jobId, job1);
+// Convert Word/PPTX/Text to PDF using Edge / Cloudflare Worker API
+export async function convertOfficeDocument(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch('/api/convert-document', {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errJson = await response.json().catch(() => ({}));
+    throw new Error(errJson.error || 'Failed to convert document to PDF.');
   }
 
-  await delay(6000); // 6s printing
-  const job2 = mockJobs.get(jobId);
-  if (job2 && job2.status === 'printing') {
-    job2.status = 'completed';
-    mockJobs.set(jobId, job2);
+  const result = await response.json();
+  if (!result.success || !result.pdfBase64) {
+    throw new Error(result.error || 'Conversion failed to return PDF data.');
   }
+
+  // Convert Base64 back to a standard File object
+  const byteCharacters = atob(result.pdfBase64);
+  const byteNumbers = new Array(byteCharacters.length);
+  for (let i = 0; i < byteCharacters.length; i++) {
+    byteNumbers[i] = byteCharacters.charCodeAt(i);
+  }
+  const byteArray = new Uint8Array(byteNumbers);
+  const pdfBlob = new Blob([byteArray], { type: 'application/pdf' });
+  const convertedPdfFile = new File([pdfBlob], result.fileName, { type: 'application/pdf' });
+
+  return {
+    convertedFile: convertedPdfFile,
+    fileName: result.fileName,
+    originalName: result.originalName,
+    totalPages: result.totalPages,
+    fileSize: result.fileSize,
+  };
 }

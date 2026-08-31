@@ -4,9 +4,9 @@ export const runtime = 'edge';
 
 export async function GET() {
   return NextResponse.json({
-    version: '1.4.21',
+    version: '1.4.22',
     downloadUrl: 'https://printbolt.store/downloads/PrintShopAgent.exe',
-    releaseNotes: 'PrintBolt Agent v1.4.21 - Optimize standalone single-file binary size: GZip-compressed embedded native PDF rendering engines (size reduced from 29.8MB to 14.5MB), perfectly within Cloudflare Pages 25MB limit.',
+    releaseNotes: 'PrintBolt Agent v1.4.22 - Cloudflare Pages + Worker setup: Word (.docx, .doc) & PowerPoint (.pptx, .ppt) high-fidelity PDF conversion pipeline and direct printing support.',
     mandatory: false,
   });
 }

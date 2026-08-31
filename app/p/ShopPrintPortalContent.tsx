@@ -7,7 +7,7 @@ import Script from 'next/script';
 import AppShell from '../../components/AppShell';
 import PdfPreviewer from '../../components/PdfPreviewer';
 import PaymentPanel from '../../components/PaymentPanel';
-import { getShopDetails, createPrintJob, uploadPrintFile } from '../../services/api';
+import { getShopDetails, createPrintJob, uploadPrintFile, convertOfficeDocument } from '../../services/api';
 import { ArrowLeft, ArrowRight, FileText, AlertTriangle, Trash2, Sliders, UploadCloud, Loader2, CheckCircle2 } from 'lucide-react';
 
 interface UploadedFileEntry {
@@ -127,7 +127,7 @@ export default function ShopPrintPortalContent() {
     });
   };
 
-  // Process selected files
+  // Process selected files (PDF, Word, PPTX)
   const processFiles = async (files: FileList) => {
     const activeShopId = shopSettings?.user_id;
     if (!activeShopId) return;
@@ -135,15 +135,21 @@ export default function ShopPrintPortalContent() {
     const filesArray = Array.from(files);
     
     for (const file of filesArray) {
+      const lowerName = file.name.toLowerCase();
+      const isPdf = file.type === 'application/pdf' || lowerName.endsWith('.pdf');
+      const isWord = lowerName.endsWith('.docx') || lowerName.endsWith('.doc');
+      const isPpt = lowerName.endsWith('.pptx') || lowerName.endsWith('.ppt');
+      const isText = lowerName.endsWith('.txt') || lowerName.endsWith('.rtf');
+
       // Validate format
-      if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-        alert(`"${file.name}" is not a PDF file. Only PDF files are supported.`);
+      if (!isPdf && !isWord && !isPpt && !isText) {
+        alert(`"${file.name}" is not a supported format. Please upload PDF, Word (.docx, .doc), or PowerPoint (.pptx, .ppt) files.`);
         continue;
       }
       
-      // Validate size: 25MB limit
-      if (file.size > 25 * 1024 * 1024) {
-        alert(`"${file.name}" exceeds the 25MB file size limit.`);
+      // Validate size: 50MB limit
+      if (file.size > 50 * 1024 * 1024) {
+        alert(`"${file.name}" exceeds the 50MB file size limit.`);
         continue;
       }
 
@@ -158,12 +164,25 @@ export default function ShopPrintPortalContent() {
       }]);
 
       try {
-        // Upload to storage bucket
-        const metadata = await uploadPrintFile(activeShopId, file);
-        setUploadTasks(prev => prev.map(t => t.id === tempId ? { ...t, progress: 60 } : t));
+        let finalFile: File = file;
+        let totalPages = 0;
+
+        // If it's a Word or PPT document, convert it to high-fidelity PDF first
+        if (!isPdf) {
+          setUploadTasks(prev => prev.map(t => t.id === tempId ? { ...t, progress: 35 } : t));
+          const conversionResult = await convertOfficeDocument(file);
+          finalFile = conversionResult.convertedFile;
+          totalPages = conversionResult.totalPages;
+          setUploadTasks(prev => prev.map(t => t.id === tempId ? { ...t, progress: 70 } : t));
+        }
+
+        // Upload standardized PDF to storage bucket
+        const metadata = await uploadPrintFile(activeShopId, finalFile);
         
-        // Count PDF pages
-        const totalPages = await getPdfPageCount(file);
+        // Count PDF pages if not already obtained
+        if (!totalPages) {
+          totalPages = await getPdfPageCount(finalFile);
+        }
         const allPages = Array.from({ length: totalPages }, (_, i) => i + 1);
 
         setUploadTasks(prev => prev.map(t => t.id === tempId ? { ...t, progress: 100, status: 'success' } : t));
@@ -171,7 +190,7 @@ export default function ShopPrintPortalContent() {
         // Append to ready files list
         const newEntry: UploadedFileEntry = {
           id: metadata.jobId,
-          fileObject: file,
+          fileObject: finalFile,
           fileName: metadata.fileName,
           fileUrl: metadata.fileUrl,
           fileSize: metadata.fileSize,
@@ -193,11 +212,11 @@ export default function ShopPrintPortalContent() {
         }, 1500);
 
       } catch (err: any) {
-        console.error("Upload failed for file: " + file.name, err);
+        console.error("Processing failed for file: " + file.name, err);
         setUploadTasks(prev => prev.map(t => t.id === tempId ? {
           ...t,
           status: 'error',
-          errorMsg: err.message || 'Upload failed. Check connection.'
+          errorMsg: err.message || 'Processing failed. Check connection.'
         } : t));
       }
     }
@@ -486,7 +505,7 @@ export default function ShopPrintPortalContent() {
                     type="file"
                     ref={fileInputRef}
                     onChange={handleFileSelect}
-                    accept=".pdf,application/pdf"
+                    accept=".pdf,.docx,.doc,.pptx,.ppt,.rtf,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/msword,application/vnd.ms-powerpoint"
                     multiple
                     className="hidden"
                   />
@@ -500,7 +519,7 @@ export default function ShopPrintPortalContent() {
                       <UploadCloud className="w-8 h-8" />
                     </div>
                     <h3 className="font-extrabold text-gray-800 text-base mb-0.5">Upload Documents</h3>
-                    <p className="text-xs text-gray-400 mb-4 max-w-[255px]">Drag & drop one or multiple PDF files here, or tap to choose files</p>
+                    <p className="text-xs text-gray-400 mb-4 max-w-[280px]">Drag & drop PDF, Word (.docx) or PowerPoint (.pptx) files here, or tap to choose</p>
                     <span className="inline-block bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold py-2.5 px-6 rounded-xl shadow-md transition">
                       Choose Files
                     </span>
