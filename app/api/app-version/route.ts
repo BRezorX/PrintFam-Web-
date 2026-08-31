@@ -4,9 +4,9 @@ export const runtime = 'edge';
 
 export async function GET() {
   return NextResponse.json({
-    version: '1.4.26',
+    version: '1.4.27',
     downloadUrl: 'https://printbolt.store/downloads/PrintShopAgent.exe',
-    releaseNotes: 'PrintBolt Agent v1.4.26 - Connect PrintBolt high-fidelity Font Engine (Render live service: https://printbolt-font-engine.onrender.com) for pixel-perfect Word & PPTX conversions with full Windows fonts.',
+    releaseNotes: 'PrintBolt Agent v1.4.27 - Fix automatic session JWT token refresh in Desktop Agent polling loop so print jobs are processed continuously without 1-hour expiration stalls.',
     mandatory: false,
   });
 }
