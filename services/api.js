@@ -238,41 +238,38 @@ export function subscribeToJobStatus(jobId, onUpdate) {
   };
 }
 
-// Convert Word/PPTX/Text to PDF using Edge / Cloudflare Worker API
-export async function convertOfficeDocument(file) {
-  const formData = new FormData();
-  formData.append('file', file);
+// Fast Client-Side Metadata Reader for Word (.docx) & PowerPoint (.pptx)
+export async function getOfficeDocumentMetadata(file) {
+  const fileName = file.name || 'document';
+  const ext = fileName.split('.').pop()?.toLowerCase() || '';
 
-  const response = await fetch('/api/convert-document', {
-    method: 'POST',
-    body: formData,
-  });
+  let totalPages = 1;
 
-  if (!response.ok) {
-    const errJson = await response.json().catch(() => ({}));
-    throw new Error(errJson.error || 'Failed to convert document to PDF.');
+  try {
+    // Read the file bytes to extract XML metadata (Pages/Slides)
+    const buffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    const text = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+
+    // Try finding <Pages>X</Pages> for Word
+    const pagesMatch = text.match(/<Pages>(\d+)<\/Pages>/i);
+    if (pagesMatch && pagesMatch[1]) {
+      totalPages = parseInt(pagesMatch[1], 10);
+    } else {
+      // Try finding <Slides>X</Slides> for PowerPoint
+      const slidesMatch = text.match(/<Slides>(\d+)<\/Slides>/i);
+      if (slidesMatch && slidesMatch[1]) {
+        totalPages = parseInt(slidesMatch[1], 10);
+      }
+    }
+  } catch (err) {
+    console.warn("Could not extract Office metadata from file", err);
   }
-
-  const result = await response.json();
-  if (!result.success || !result.pdfBase64) {
-    throw new Error(result.error || 'Conversion failed to return PDF data.');
-  }
-
-  // Convert Base64 back to a standard File object
-  const byteCharacters = atob(result.pdfBase64);
-  const byteNumbers = new Array(byteCharacters.length);
-  for (let i = 0; i < byteCharacters.length; i++) {
-    byteNumbers[i] = byteCharacters.charCodeAt(i);
-  }
-  const byteArray = new Uint8Array(byteNumbers);
-  const pdfBlob = new Blob([byteArray], { type: 'application/pdf' });
-  const convertedPdfFile = new File([pdfBlob], result.fileName, { type: 'application/pdf' });
 
   return {
-    convertedFile: convertedPdfFile,
-    fileName: result.fileName,
-    originalName: result.originalName,
-    totalPages: result.totalPages,
-    fileSize: result.fileSize,
+    fileName,
+    fileSize: file.size,
+    totalPages: Math.max(1, totalPages),
+    isOffice: ext === 'docx' || ext === 'doc' || ext === 'pptx' || ext === 'ppt'
   };
 }

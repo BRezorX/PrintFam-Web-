@@ -7,7 +7,7 @@ import Script from 'next/script';
 import AppShell from '../../components/AppShell';
 import PdfPreviewer from '../../components/PdfPreviewer';
 import PaymentPanel from '../../components/PaymentPanel';
-import { getShopDetails, createPrintJob, uploadPrintFile, convertOfficeDocument } from '../../services/api';
+import { getShopDetails, createPrintJob, uploadPrintFile, getOfficeDocumentMetadata } from '../../services/api';
 import { ArrowLeft, ArrowRight, FileText, AlertTriangle, Trash2, Sliders, UploadCloud, Loader2, CheckCircle2 } from 'lucide-react';
 
 interface UploadedFileEntry {
@@ -38,9 +38,7 @@ interface UploadTask {
 export default function ShopPrintPortalContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const rawShopId = searchParams ? (searchParams.get('shopId') || searchParams.get('shopid') || '') : '';
-  const uuidMatch = rawShopId.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
-  const shopId = uuidMatch ? uuidMatch[0] : rawShopId;
+  const shopParam = searchParams.get('shop') || searchParams.get('s') || '';
 
   // Shop settings state
   const [shopSettings, setShopSettings] = useState<any>(null);
@@ -60,34 +58,27 @@ export default function ShopPrintPortalContent() {
 
   // Fetch shop settings on mount
   useEffect(() => {
-    if (!shopId) {
-      setError("No Shop ID provided in the URL. Please scan the QR code again.");
-      setLoading(false);
-      return;
-    }
-
-    const fetchShopInfo = async () => {
+    async function loadShop() {
       try {
         setLoading(true);
-        const data = await getShopDetails(shopId);
-        if (data) {
+        const data = await getShopDetails(shopParam);
+        if (!data) {
+          setError('Print shop not found. Please scan the QR code at the counter again.');
+        } else {
           setShopSettings(data);
           sessionStorage.setItem('current_shop_id', data.user_id);
           sessionStorage.setItem('current_shop_name', data.shop_name);
           sessionStorage.setItem('current_shop_settings', JSON.stringify(data));
-        } else {
-          setError("Shop details could not be found. Please check the QR code.");
         }
-      } catch (err) {
-        console.error(err);
-        setError("Error connecting to printing shop. Check your network.");
+      } catch (err: any) {
+        console.error('Failed to load shop details', err);
+        setError('Could not connect to this print shop. Please check your internet connection.');
       } finally {
         setLoading(false);
       }
-    };
-
-    fetchShopInfo();
-  }, [shopId]);
+    }
+    loadShop();
+  }, [shopParam]);
 
   // Prompt protection if files are uploaded
   useEffect(() => {
@@ -103,40 +94,43 @@ export default function ShopPrintPortalContent() {
     };
   }, [uploadedFiles]);
 
-  // Parse PDF Page Count Client-Side using PDF.js
-  const getPdfPageCount = (file: File): Promise<number> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = async function () {
-        try {
-          const pdfjsLib = (window as any).pdfjsLib;
-          if (!pdfjsLib) {
-            throw new Error("PDF.js library is not loaded yet. Please wait a second and retry.");
+  // Extract Page Count from standard PDF
+  const getPdfPageCount = async (file: File): Promise<number> => {
+    return new Promise((resolve) => {
+      try {
+        const reader = new FileReader();
+        reader.onload = function () {
+          try {
+            const typedArray = new Uint8Array(this.result as ArrayBuffer);
+            if (typeof window !== 'undefined' && (window as any).pdfjsLib) {
+              (window as any).pdfjsLib.getDocument({ data: typedArray }).promise.then((pdf: any) => {
+                resolve(pdf.numPages);
+              }).catch(() => resolve(1));
+            } else {
+              // Fallback page count extraction via regex
+              const text = new TextDecoder('utf-8', { fatal: false }).decode(typedArray);
+              const matches = text.match(/\/Type\s*\/Page[^s]/g);
+              resolve(matches ? matches.length : 1);
+            }
+          } catch {
+            resolve(1);
           }
-          pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-          const arrayBuffer = this.result as ArrayBuffer;
-          const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-          const doc = await loadingTask.promise;
-          resolve(doc.numPages);
-        } catch (err) {
-          reject(err);
-        }
-      };
-      reader.onerror = reject;
-      reader.readAsArrayBuffer(file);
+        };
+        reader.readAsArrayBuffer(file);
+      } catch {
+        resolve(1);
+      }
     });
   };
 
   // Process selected files (PDF, Word, PPTX)
-  const processFiles = async (files: FileList) => {
-    const activeShopId = shopSettings?.user_id;
-    if (!activeShopId) return;
-
-    const filesArray = Array.from(files);
+  const processFiles = async (files: FileList | File[]) => {
+    const activeShopId = shopSettings?.user_id || 'demo_shop';
     
-    for (const file of filesArray) {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
       const lowerName = file.name.toLowerCase();
-      const isPdf = file.type === 'application/pdf' || lowerName.endsWith('.pdf');
+      const isPdf = lowerName.endsWith('.pdf') || file.type === 'application/pdf';
       const isWord = lowerName.endsWith('.docx') || lowerName.endsWith('.doc');
       const isPpt = lowerName.endsWith('.pptx') || lowerName.endsWith('.ppt');
       const isText = lowerName.endsWith('.txt') || lowerName.endsWith('.rtf');
@@ -164,25 +158,22 @@ export default function ShopPrintPortalContent() {
       }]);
 
       try {
-        let finalFile: File = file;
         let totalPages = 0;
 
-        // If it's a Word or PPT document, convert it to high-fidelity PDF first
-        if (!isPdf) {
+        if (isPdf) {
+          totalPages = await getPdfPageCount(file);
+        } else {
           setUploadTasks(prev => prev.map(t => t.id === tempId ? { ...t, progress: 35 } : t));
-          const conversionResult = await convertOfficeDocument(file);
-          finalFile = conversionResult.convertedFile;
-          totalPages = conversionResult.totalPages;
-          setUploadTasks(prev => prev.map(t => t.id === tempId ? { ...t, progress: 70 } : t));
+          const meta = await getOfficeDocumentMetadata(file);
+          totalPages = meta.totalPages;
         }
 
-        // Upload standardized PDF to storage bucket
-        const metadata = await uploadPrintFile(activeShopId, finalFile);
+        // Upload original file directly to Supabase storage bucket
+        const metadata = await uploadPrintFile(activeShopId, file, (progress: number) => {
+          setUploadTasks(prev => prev.map(t => t.id === tempId ? { ...t, progress: Math.max(50, progress) } : t));
+        });
         
-        // Count PDF pages if not already obtained
-        if (!totalPages) {
-          totalPages = await getPdfPageCount(finalFile);
-        }
+        if (!totalPages) totalPages = 1;
         const allPages = Array.from({ length: totalPages }, (_, i) => i + 1);
 
         setUploadTasks(prev => prev.map(t => t.id === tempId ? { ...t, progress: 100, status: 'success' } : t));
@@ -190,7 +181,7 @@ export default function ShopPrintPortalContent() {
         // Append to ready files list
         const newEntry: UploadedFileEntry = {
           id: metadata.jobId,
-          fileObject: finalFile,
+          fileObject: file,
           fileName: metadata.fileName,
           fileUrl: metadata.fileUrl,
           fileSize: metadata.fileSize,
@@ -879,6 +870,7 @@ export default function ShopPrintPortalContent() {
                   <div className="p-5 overflow-y-auto flex-1 bg-gray-50/20">
                     <PdfPreviewer
                       file={uploadedFiles[activePreviewIdx].fileObject}
+                      totalPages={uploadedFiles[activePreviewIdx].totalPages}
                       selectedPages={uploadedFiles[activePreviewIdx].selectedPages}
                       onSelectionChange={(newSelection: number[]) => {
                         const updated = [...uploadedFiles];

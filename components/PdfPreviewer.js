@@ -2,13 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import Script from 'next/script';
 import { Layers, CheckSquare, Square, RefreshCcw, AlertTriangle } from 'lucide-react';
 
-export default function PdfPreviewer({ file, selectedPages, onSelectionChange }) {
+export default function PdfPreviewer({ file, totalPages = 1, selectedPages, onSelectionChange }) {
   const [pdfjsLoaded, setPdfjsLoaded] = useState(false);
   const [pdfDoc, setPdfDoc] = useState(null);
-  const [numPages, setNumPages] = useState(0);
+  const [numPages, setNumPages] = useState(totalPages || 1);
   const [rangeInput, setRangeInput] = useState('');
   const [rangeError, setRangeError] = useState('');
   const [loading, setLoading] = useState(true);
+
+  const isPdf = file?.name?.toLowerCase().endsWith('.pdf') || file?.type === 'application/pdf';
 
   // Check if PDF.js is already loaded in the window on mount
   useEffect(() => {
@@ -17,16 +19,33 @@ export default function PdfPreviewer({ file, selectedPages, onSelectionChange })
     }
   }, []);
 
-  // Initialize PDF.js once the script is loaded
+  // Initialize PDF.js once the script is loaded (for PDF files) or setup Office docs
   useEffect(() => {
-    if (!pdfjsLoaded || !file) return;
+    if (!file) return;
+
+    if (!isPdf) {
+      // Non-PDF Office document: initialize with totalPages
+      const count = totalPages || file.totalPages || 1;
+      setNumPages(count);
+      setLoading(false);
+
+      if (selectedPages && selectedPages.length > 0) {
+        setRangeInput(formatPageRange(selectedPages));
+      } else {
+        const allPages = Array.from({ length: count }, (_, i) => i + 1);
+        onSelectionChange(allPages);
+        setRangeInput(formatPageRange(allPages));
+      }
+      return;
+    }
+
+    if (!pdfjsLoaded) return;
 
     let isCancelled = false;
     const loadPdf = async () => {
       try {
         setLoading(true);
         const pdfjsLib = window.pdfjsLib;
-        // Point to cdn worker
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
         const reader = new FileReader();
@@ -41,7 +60,6 @@ export default function PdfPreviewer({ file, selectedPages, onSelectionChange })
             setNumPages(doc.numPages);
             setLoading(false);
 
-            // Default: Select all pages only if no previous selection exists
             if (selectedPages && selectedPages.length > 0) {
               setRangeInput(formatPageRange(selectedPages));
             } else {
@@ -68,7 +86,7 @@ export default function PdfPreviewer({ file, selectedPages, onSelectionChange })
     return () => {
       isCancelled = true;
     };
-  }, [pdfjsLoaded, file]);
+  }, [pdfjsLoaded, file, isPdf, totalPages]);
 
   // Synchronize rangeInput text box whenever visual selectedPages array changes
   useEffect(() => {
@@ -213,12 +231,25 @@ export default function PdfPreviewer({ file, selectedPages, onSelectionChange })
                     )}
                   </div>
                   
-                  {/* Visual Canvas Page rendering */}
-                  <div className="w-full aspect-[3/4] flex items-center justify-center overflow-hidden mb-1">
-                    <PdfPageThumbnail pdfDoc={pdfDoc} pageNum={pageNum} />
+                  {/* Visual Canvas Page rendering or Office Document Badge */}
+                  <div className="w-full aspect-[3/4] flex items-center justify-center overflow-hidden mb-1 bg-gray-50 rounded-lg">
+                    {pdfDoc ? (
+                      <PdfPageThumbnail pdfDoc={pdfDoc} pageNum={pageNum} />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center text-center p-2">
+                        <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center font-bold text-xs mb-1">
+                          {file?.name?.toLowerCase().endsWith('.pptx') || file?.name?.toLowerCase().endsWith('.ppt') ? 'PPT' : 'DOC'}
+                        </div>
+                        <span className="text-[9px] font-bold text-gray-500">
+                          {file?.name?.toLowerCase().endsWith('.pptx') || file?.name?.toLowerCase().endsWith('.ppt') ? `Slide ${pageNum}` : `Page ${pageNum}`}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   
-                  <span className="text-[10px] font-bold text-gray-500">Page {pageNum}</span>
+                  <span className="text-[10px] font-bold text-gray-500">
+                    {file?.name?.toLowerCase().endsWith('.pptx') || file?.name?.toLowerCase().endsWith('.ppt') ? `Slide ${pageNum}` : `Page ${pageNum}`}
+                  </span>
                 </div>
               );
             })}
