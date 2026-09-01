@@ -720,10 +720,14 @@ export default function ShopPrintPortalContent() {
                           <span className="block text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">Select Pages</span>
                           <button
                             onClick={() => setActivePreviewIdx(idx)}
-                            className="w-full py-1.5 px-3 border border-gray-200 rounded-lg text-center font-bold text-gray-500 hover:bg-gray-50 active:bg-gray-100 transition flex items-center justify-center space-x-1"
+                            className="w-full py-1.5 px-2 border border-blue-200 bg-blue-50/50 rounded-lg text-center font-bold text-blue-700 hover:bg-blue-100/70 active:bg-blue-100 transition flex items-center justify-center space-x-1"
                           >
-                            <Sliders className="w-3.5 h-3.5" />
-                            <span>Select Pages</span>
+                            <Sliders className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                            <span className="truncate">
+                              {fileEntry.selectedPages.length === fileEntry.totalPages
+                                ? `All ${fileEntry.totalPages} Pages`
+                                : `${fileEntry.selectedPages.length}/${fileEntry.totalPages} Pages`}
+                            </span>
                           </button>
                         </div>
                       </div>
@@ -862,19 +866,38 @@ export default function ShopPrintPortalContent() {
             {activePreviewIdx !== null && (
               <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
                 <div className="bg-white rounded-3xl max-w-lg w-full max-h-[85vh] overflow-hidden shadow-2xl flex flex-col">
-                  <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                    <div className="overflow-hidden pr-4">
+                  <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                    <div className="overflow-hidden pr-3">
                       <h3 className="font-extrabold text-gray-900 text-sm uppercase tracking-wider">Customize Pages</h3>
                       <p className="text-xs text-gray-500 font-bold truncate mt-0.5">
                         {uploadedFiles[activePreviewIdx].fileName}
                       </p>
                     </div>
-                    <button
-                      onClick={() => setActivePreviewIdx(null)}
-                      className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold px-5 py-2.5 rounded-xl transition text-xs shadow-md"
-                    >
-                      Apply Selection
-                    </button>
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden bg-white shadow-xs">
+                        <span className="text-[10px] font-bold text-gray-400 px-2 py-1 bg-gray-50 border-r border-gray-200">Total:</span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="999"
+                          value={uploadedFiles[activePreviewIdx].totalPages}
+                          onChange={(e) => {
+                            const newTotal = Math.max(1, parseInt(e.target.value, 10) || 1);
+                            const updated = [...uploadedFiles];
+                            updated[activePreviewIdx].totalPages = newTotal;
+                            updated[activePreviewIdx].selectedPages = Array.from({ length: newTotal }, (_, i) => i + 1);
+                            setUploadedFiles(updated);
+                          }}
+                          className="w-11 text-center text-xs font-black py-1 focus:outline-none text-gray-800"
+                        />
+                      </div>
+                      <button
+                        onClick={() => setActivePreviewIdx(null)}
+                        className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold px-4 py-2 rounded-xl transition text-xs shadow-md"
+                      >
+                        Done
+                      </button>
+                    </div>
                   </div>
                   <div className="p-5 overflow-y-auto flex-1 bg-gray-50/20">
                     <PdfPreviewer

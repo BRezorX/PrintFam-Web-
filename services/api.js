@@ -240,7 +240,9 @@ export function subscribeToJobStatus(jobId, onUpdate) {
   };
 }
 
-// Fast Client-Side Metadata Reader for Word (.docx) & PowerPoint (.pptx)
+import JSZip from 'jszip';
+
+// Fast & Exact Client-Side Metadata Reader for Word (.docx) & PowerPoint (.pptx)
 export async function getOfficeDocumentMetadata(file) {
   const fileName = file.name || 'document';
   const ext = fileName.split('.').pop()?.toLowerCase() || '';
@@ -248,24 +250,44 @@ export async function getOfficeDocumentMetadata(file) {
   let totalPages = 1;
 
   try {
-    // Read the file bytes to extract XML metadata (Pages/Slides)
-    const buffer = await file.arrayBuffer();
-    const bytes = new Uint8Array(buffer);
-    const text = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+    const zip = new JSZip();
+    const loadedZip = await zip.loadAsync(file);
 
-    // Try finding <Pages>X</Pages> for Word
-    const pagesMatch = text.match(/<Pages>(\d+)<\/Pages>/i);
-    if (pagesMatch && pagesMatch[1]) {
-      totalPages = parseInt(pagesMatch[1], 10);
-    } else {
-      // Try finding <Slides>X</Slides> for PowerPoint
-      const slidesMatch = text.match(/<Slides>(\d+)<\/Slides>/i);
-      if (slidesMatch && slidesMatch[1]) {
-        totalPages = parseInt(slidesMatch[1], 10);
+    if (ext === 'pptx' || ext === 'ppt') {
+      // 1. Exact Slide Count: Inspect all slide XML entries in ppt/slides/slide*.xml
+      const slideFiles = Object.keys(loadedZip.files).filter(path => /^ppt\/slides\/slide\d+\.xml$/i.test(path));
+      if (slideFiles.length > 0) {
+        totalPages = slideFiles.length;
+      } else {
+        // Fallback: Check docProps/app.xml <Slides>
+        const appXmlFile = loadedZip.file('docProps/app.xml');
+        if (appXmlFile) {
+          const appXmlText = await appXmlFile.async('text');
+          const match = appXmlText.match(/<Slides>(\d+)<\/Slides>/i);
+          if (match && match[1]) totalPages = parseInt(match[1], 10);
+        }
+      }
+    } else if (ext === 'docx' || ext === 'doc') {
+      // Word Documents: Check docProps/app.xml <Pages>
+      const appXmlFile = loadedZip.file('docProps/app.xml');
+      if (appXmlFile) {
+        const appXmlText = await appXmlFile.async('text');
+        const match = appXmlText.match(/<Pages>(\d+)<\/Pages>/i);
+        if (match && match[1]) {
+          totalPages = parseInt(match[1], 10);
+        } else {
+          // If Pages count is not cached in app.xml, count page breaks in word/document.xml
+          const docXmlFile = loadedZip.file('word/document.xml');
+          if (docXmlFile) {
+            const docXmlText = await docXmlFile.async('text');
+            const pageBreaks = (docXmlText.match(/w:type="page"/g) || []).length + (docXmlText.match(/<w:lastRenderedPageBreak\/>/g) || []).length;
+            totalPages = Math.max(1, pageBreaks + 1);
+          }
+        }
       }
     }
   } catch (err) {
-    console.warn("Could not extract Office metadata from file", err);
+    console.warn("Could not parse Office document zip metadata", err);
   }
 
   return {
