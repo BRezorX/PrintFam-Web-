@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Script from 'next/script';
-import { Layers, CheckSquare, Square, RefreshCcw, AlertTriangle } from 'lucide-react';
+import { Layers, CheckSquare, Square, RefreshCcw, AlertTriangle, FileText, Presentation } from 'lucide-react';
+import { extractPptxPreviews, extractDocxPreviews } from '../utils/officePreview';
 
 export default function PdfPreviewer({ file, totalPages = 1, selectedPages, onSelectionChange }) {
   const [pdfjsLoaded, setPdfjsLoaded] = useState(false);
@@ -9,8 +10,11 @@ export default function PdfPreviewer({ file, totalPages = 1, selectedPages, onSe
   const [rangeInput, setRangeInput] = useState('');
   const [rangeError, setRangeError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [officePreviews, setOfficePreviews] = useState([]);
 
   const isPdf = file?.name?.toLowerCase().endsWith('.pdf') || file?.type === 'application/pdf';
+  const isPpt = file?.name?.toLowerCase().endsWith('.pptx') || file?.name?.toLowerCase().endsWith('.ppt');
+  const isWord = file?.name?.toLowerCase().endsWith('.docx') || file?.name?.toLowerCase().endsWith('.doc');
 
   // Check if PDF.js is already loaded in the window on mount
   useEffect(() => {
@@ -24,10 +28,32 @@ export default function PdfPreviewer({ file, totalPages = 1, selectedPages, onSe
     if (!file) return;
 
     if (!isPdf) {
-      // Non-PDF Office document: initialize with totalPages
+      let isCancelled = false;
       const count = totalPages || file.totalPages || 1;
       setNumPages(count);
-      setLoading(false);
+
+      const loadOffice = async () => {
+        try {
+          setLoading(true);
+          let previews = [];
+          if (isPpt) {
+            previews = await extractPptxPreviews(file);
+          } else if (isWord) {
+            previews = await extractDocxPreviews(file, count);
+          }
+          if (isCancelled) return;
+          if (previews.length > 0) {
+            setOfficePreviews(previews);
+            setNumPages(previews.length);
+          }
+        } catch (e) {
+          console.warn("Could not extract Office preview details", e);
+        } finally {
+          if (!isCancelled) setLoading(false);
+        }
+      };
+
+      loadOffice();
 
       if (selectedPages && selectedPages.length > 0) {
         setRangeInput(formatPageRange(selectedPages));
@@ -36,7 +62,9 @@ export default function PdfPreviewer({ file, totalPages = 1, selectedPages, onSe
         onSelectionChange(allPages);
         setRangeInput(formatPageRange(allPages));
       }
-      return;
+      return () => {
+        isCancelled = true;
+      };
     }
 
     if (!pdfjsLoaded) return;
@@ -86,7 +114,7 @@ export default function PdfPreviewer({ file, totalPages = 1, selectedPages, onSe
     return () => {
       isCancelled = true;
     };
-  }, [pdfjsLoaded, file, isPdf, totalPages]);
+  }, [pdfjsLoaded, file, isPdf, isPpt, isWord, totalPages]);
 
   // Synchronize rangeInput text box whenever visual selectedPages array changes
   useEffect(() => {
@@ -142,7 +170,7 @@ export default function PdfPreviewer({ file, totalPages = 1, selectedPages, onSe
   };
 
   return (
-    <div className="w-full bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+    <div className="space-y-4">
       {/* Dynamic script loading for PDF.js CDN */}
       <Script
         src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"
@@ -150,42 +178,44 @@ export default function PdfPreviewer({ file, totalPages = 1, selectedPages, onSe
         strategy="afterInteractive"
       />
 
-      <div className="flex justify-between items-center mb-3">
-        <div className="flex items-center space-x-1.5 text-gray-700">
-          <Layers className="w-4 h-4 text-blue-600" />
-          <h3 className="font-bold text-sm uppercase tracking-wide">Document Pages</h3>
-        </div>
-        {numPages > 0 && (
-          <span className="text-xs font-bold text-gray-500 bg-gray-100 rounded-full px-2 py-0.5">
-            {selectedPages.length} of {numPages} selected
-          </span>
-        )}
-      </div>
-
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-10">
-          <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-3"></div>
-          <span className="text-xs text-gray-400 font-semibold">Reading document structure...</span>
+        <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-2xl border border-gray-100">
+          <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mb-2"></div>
+          <span className="text-xs text-gray-500 font-bold">Generating page previews...</span>
         </div>
       ) : (
-        <div>
-          {/* Manual Range Input Box */}
-          <div className="mb-4">
-            <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase">Page Range Select</label>
+        <div className="space-y-3">
+          {/* Header Controls */}
+          <div className="flex justify-between items-center text-xs">
+            <span className="font-extrabold text-gray-700 uppercase tracking-wider text-[11px] flex items-center space-x-1.5">
+              <Layers className="w-4 h-4 text-blue-600" />
+              <span>Document Pages</span>
+            </span>
+            <span className="font-black text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full text-[11px]">
+              {selectedPages?.length || 0} of {numPages} selected
+            </span>
+          </div>
+
+          {/* Quick Page Range Manual Text Input */}
+          <div className="space-y-1">
+            <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest">
+              Page Range Select
+            </label>
             <input
               type="text"
               value={rangeInput}
               onChange={handleRangeInputChange}
-              placeholder="e.g. 1-5, 8, 10-12"
-              className={`w-full text-sm font-semibold border rounded-xl px-3 py-2 outline-none transition focus:ring-2 ${
+              placeholder="e.g. 1-5, 8, 11-13"
+              className={`w-full text-xs font-extrabold p-2.5 rounded-xl border transition focus:outline-none ${
                 rangeError 
-                  ? 'border-red-300 focus:border-red-500 focus:ring-red-100' 
-                  : 'border-gray-200 focus:border-blue-500 focus:ring-blue-100'
+                  ? 'border-red-400 bg-red-50/20 text-red-700' 
+                  : 'border-gray-200 focus:border-blue-500 bg-white text-gray-800'
               }`}
             />
             {rangeError ? (
-              <p className="text-[11px] font-bold text-red-500 mt-1 flex items-center">
-                <AlertTriangle className="w-3.5 h-3.5 mr-1" /> {rangeError}
+              <p className="text-[10px] text-red-500 font-bold flex items-center space-x-1 mt-1">
+                <AlertTriangle className="w-3 h-3" />
+                <span>{rangeError}</span>
               </p>
             ) : (
               <p className="text-[10px] text-gray-400 font-medium mt-1">Specify page numbers separated by commas or ranges with dashes.</p>
@@ -209,21 +239,21 @@ export default function PdfPreviewer({ file, totalPages = 1, selectedPages, onSe
           </div>
 
           {/* Thumbnail Canvas Grid */}
-          <div className="grid grid-cols-2 gap-3 max-h-[220px] overflow-y-auto custom-scrollbar p-1 bg-gray-50 rounded-xl border border-gray-100">
+          <div className="grid grid-cols-2 gap-3 max-h-[260px] overflow-y-auto custom-scrollbar p-1 bg-gray-50 rounded-2xl border border-gray-100">
             {Array.from({ length: numPages }, (_, i) => i + 1).map((pageNum) => {
               const isSelected = selectedPages.includes(pageNum);
               return (
                 <div
                   key={pageNum}
                   onClick={() => togglePageSelection(pageNum)}
-                  className={`border-2 rounded-xl p-2 cursor-pointer transition relative flex flex-col items-center bg-white ${
+                  className={`border-2 rounded-2xl p-2 cursor-pointer transition relative flex flex-col items-center bg-white ${
                     isSelected 
-                      ? 'border-blue-600 ring-2 ring-blue-50/50 shadow-sm' 
+                      ? 'border-blue-600 ring-2 ring-blue-50 shadow-sm' 
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
                 >
                   {/* Select Icon Checkbox */}
-                  <div className="absolute top-1.5 right-1.5 z-10">
+                  <div className="absolute top-2 right-2 z-10">
                     {isSelected ? (
                       <CheckSquare className="w-4 h-4 text-blue-600 fill-white" />
                     ) : (
@@ -232,23 +262,66 @@ export default function PdfPreviewer({ file, totalPages = 1, selectedPages, onSe
                   </div>
                   
                   {/* Visual Canvas Page rendering or Office Document Badge */}
-                  <div className="w-full aspect-[3/4] flex items-center justify-center overflow-hidden mb-1 bg-gray-50 rounded-lg">
+                  <div className={`w-full ${isPpt ? 'aspect-[16/10]' : 'aspect-[3/4]'} flex items-center justify-center overflow-hidden mb-1.5 rounded-xl border border-gray-100 bg-white shadow-xs relative`}>
                     {pdfDoc ? (
                       <PdfPageThumbnail pdfDoc={pdfDoc} pageNum={pageNum} />
-                    ) : (
-                      <div className="flex flex-col items-center justify-center text-center p-2">
-                        <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center font-bold text-xs mb-1">
-                          {file?.name?.toLowerCase().endsWith('.pptx') || file?.name?.toLowerCase().endsWith('.ppt') ? 'PPT' : 'DOC'}
+                    ) : (() => {
+                      const prev = officePreviews.find(p => (p.slideNumber || p.pageNumber) === pageNum);
+                      if (prev?.imageUrl) {
+                        return (
+                          <img
+                            src={prev.imageUrl}
+                            alt={`Preview ${pageNum}`}
+                            className="w-full h-full object-cover rounded-lg"
+                          />
+                        );
+                      }
+                      if (isPpt) {
+                        return (
+                          <div
+                            className="w-full h-full p-2.5 flex flex-col justify-between text-left select-none overflow-hidden transition"
+                            style={{ backgroundColor: prev?.bgColor || '#f8fafc' }}
+                          >
+                            <div className="space-y-1">
+                              <span className="inline-block px-1.5 py-0.5 bg-blue-100/80 text-blue-700 text-[8px] font-black rounded tracking-wider uppercase">
+                                Slide {pageNum}
+                              </span>
+                              <h5 className="font-extrabold text-[11px] leading-tight text-gray-800 line-clamp-2">
+                                {prev?.title || `Slide ${pageNum}`}
+                              </h5>
+                            </div>
+                            <div className="space-y-0.5">
+                              {prev?.texts?.slice(0, 2).map((t, idx) => (
+                                <p key={idx} className="text-[8.5px] text-gray-500 leading-snug truncate">
+                                  • {t}
+                                </p>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="w-full h-full p-2.5 flex flex-col justify-between bg-white text-left select-none overflow-hidden border border-gray-50">
+                          <div className="space-y-1">
+                            <span className="inline-block px-1.5 py-0.5 bg-blue-50 text-blue-600 text-[8px] font-bold rounded">
+                              Page {pageNum}
+                            </span>
+                            <h5 className="font-extrabold text-[10px] text-gray-800 line-clamp-2">
+                              {prev?.heading || `Document Page ${pageNum}`}
+                            </h5>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="h-1.5 bg-gray-200 rounded w-full opacity-60"></div>
+                            <div className="h-1.5 bg-gray-200 rounded w-4/5 opacity-60"></div>
+                            <div className="h-1.5 bg-gray-200 rounded w-2/3 opacity-60"></div>
+                          </div>
                         </div>
-                        <span className="text-[9px] font-bold text-gray-500">
-                          {file?.name?.toLowerCase().endsWith('.pptx') || file?.name?.toLowerCase().endsWith('.ppt') ? `Slide ${pageNum}` : `Page ${pageNum}`}
-                        </span>
-                      </div>
-                    )}
+                      );
+                    })()}
                   </div>
                   
                   <span className="text-[10px] font-bold text-gray-500">
-                    {file?.name?.toLowerCase().endsWith('.pptx') || file?.name?.toLowerCase().endsWith('.ppt') ? `Slide ${pageNum}` : `Page ${pageNum}`}
+                    {isPpt ? `Slide ${pageNum}` : `Page ${pageNum}`}
                   </span>
                 </div>
               );
