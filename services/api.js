@@ -28,8 +28,10 @@ const mockJobs = new Map();
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 export async function getShopDetails(shopId) {
+  if (!shopId) return null;
   const match = typeof shopId === 'string' ? shopId.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/) : null;
   const cleanShopId = match ? match[0] : shopId;
+  if (!cleanShopId) return null;
 
   if (isDemoMode || !supabase) {
     await delay(600);

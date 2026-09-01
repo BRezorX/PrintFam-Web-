@@ -38,7 +38,16 @@ interface UploadTask {
 export default function ShopPrintPortalContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const shopParam = searchParams.get('shop') || searchParams.get('s') || '';
+  const rawShopId = searchParams ? (
+    searchParams.get('shopId') || 
+    searchParams.get('shop_id') || 
+    searchParams.get('shopid') || 
+    searchParams.get('shop') || 
+    searchParams.get('s') || 
+    ''
+  ) : '';
+  const uuidMatch = rawShopId.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
+  const shopParam = uuidMatch ? uuidMatch[0] : rawShopId;
 
   // Shop settings state
   const [shopSettings, setShopSettings] = useState<any>(null);
