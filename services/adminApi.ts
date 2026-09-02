@@ -354,22 +354,37 @@ export async function getAllShopsWithMetrics(): Promise<{ shops: ShopSummary[]; 
   }
 
   try {
-    const { data: shopsData, error: shopsErr } = await supabase
-      .from('shop_settings')
-      .select('*')
-      .order('created_at', { ascending: false });
+    // 1. Try fetching via RPC function with joined auth emails
+    let rawShops: any[] = [];
+    const { data: rpcShops, error: rpcErr } = await supabase.rpc('get_all_shops_for_admin');
 
-    if (shopsErr) throw shopsErr;
+    if (!rpcErr && rpcShops && Array.isArray(rpcShops)) {
+      rawShops = rpcShops;
+    } else {
+      // Fallback: Query shop_settings directly
+      const { data: directShops, error: directErr } = await supabase
+        .from('shop_settings')
+        .select('*');
 
+      if (directErr) {
+        console.warn("adminApi: direct shop_settings select warning", directErr);
+      }
+      rawShops = directShops || [];
+    }
+
+    // 2. Fetch all print audits for volume & revenue calculations
     const { data: auditsData, error: auditsErr } = await supabase
       .from('print_audits')
-      .select('*')
-      .order('created_at', { ascending: false });
+      .select('*');
+
+    if (auditsErr) {
+      console.warn("adminApi: print_audits fetch warning", auditsErr);
+    }
 
     const audits: PrintAuditEntry[] = auditsData || [];
     const todayDateStr = new Date().toISOString().split('T')[0];
 
-    const shops: ShopSummary[] = (shopsData || []).map((shop: any) => {
+    const shops: ShopSummary[] = rawShops.map((shop: any) => {
       const shopAudits = audits.filter(a => a.user_id === shop.user_id);
       const todayAudits = shopAudits.filter(a => (a.created_at || '').startsWith(todayDateStr));
 
@@ -438,7 +453,21 @@ export async function getAllShopsWithMetrics(): Promise<{ shops: ShopSummary[]; 
     return { shops, metrics };
   } catch (error) {
     console.error("adminApi: getAllShopsWithMetrics failed", error);
-    throw error;
+    return {
+      shops: [],
+      metrics: {
+        totalShops: 0,
+        activeShopsCount: 0,
+        totalJobs: 0,
+        totalPages: 0,
+        totalBwPages: 0,
+        totalColorPages: 0,
+        totalRevenue: 0,
+        todayJobs: 0,
+        todayPages: 0,
+        todayRevenue: 0,
+      }
+    };
   }
 }
 
