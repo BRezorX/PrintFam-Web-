@@ -37,7 +37,9 @@ import {
   Radio,
   Wifi,
   WifiOff,
-  AlertTriangle
+  AlertTriangle,
+  History,
+  Filter
 } from 'lucide-react';
 import { 
   checkAdminStatus, 
@@ -49,16 +51,20 @@ import {
   logoutAdmin, 
   getAllShopsWithMetrics, 
   getShopAuditLogs, 
+  getAllPlatformPrintAudits, 
   toggleShopPause, 
   deleteShop, 
   exportShopAuditsToCSV, 
+  exportAllAuditsToCSV, 
   ShopSummary, 
   PlatformMetrics, 
-  PrintAuditEntry 
+  PrintAuditEntry, 
+  GlobalPrintAuditEntry 
 } from '../../services/adminApi';
 
 type AuthViewMode = 'login' | 'register_initial' | 'forgot_password' | 'set_new_password';
 type TimeframeMode = 'today' | 'weekly' | 'monthly' | 'all';
+type AdminTabMode = 'shops' | 'history';
 
 export default function AdminDashboardContent() {
   const searchParams = useSearchParams();
@@ -79,13 +85,23 @@ export default function AdminDashboardContent() {
   const [authSuccess, setAuthSuccess] = useState('');
   const [submittingAuth, setSubmittingAuth] = useState(false);
 
+  // Active Navigation Tab
+  const [activeTab, setActiveTab] = useState<AdminTabMode>('shops');
+
   // Dashboard Data State
   const [shops, setShops] = useState<ShopSummary[]>([]);
+  const [globalAudits, setGlobalAudits] = useState<GlobalPrintAuditEntry[]>([]);
   const [metrics, setMetrics] = useState<PlatformMetrics | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'online' | 'offline' | 'paused'>('all');
   const [timeframe, setTimeframe] = useState<TimeframeMode>('monthly');
+
+  // Global History Filters
+  const [historySearchQuery, setHistorySearchQuery] = useState('');
+  const [historyShopFilter, setHistoryShopFilter] = useState<string>('all');
+  const [historyColorFilter, setHistoryColorFilter] = useState<'all' | 'color' | 'bw'>('all');
 
   // Modal / Drawer State
   const [selectedShop, setSelectedShop] = useState<ShopSummary | null>(null);
@@ -129,13 +145,17 @@ export default function AdminDashboardContent() {
     initAuth();
   }, [resetModeParam]);
 
-  // Load metrics when admin is authenticated
+  // Load metrics & global audits when admin is authenticated
   const loadData = async () => {
     try {
       setLoading(true);
       const res = await getAllShopsWithMetrics();
       setShops(res.shops);
       setMetrics(res.metrics);
+
+      // Also load platform-wide print history
+      const audits = await getAllPlatformPrintAudits(res.shops);
+      setGlobalAudits(audits);
     } catch (err) {
       console.error("Failed to load admin metrics", err);
     } finally {
@@ -322,6 +342,30 @@ export default function AdminDashboardContent() {
     });
   }, [shops, searchQuery, statusFilter]);
 
+  // Filtered Global Print History
+  const filteredGlobalAudits = useMemo(() => {
+    return globalAudits.filter(item => {
+      const q = historySearchQuery.toLowerCase().trim();
+      const matchesSearch = 
+        !q ||
+        item.file_name.toLowerCase().includes(q) ||
+        item.shop_name.toLowerCase().includes(q) ||
+        (item.printer_name && item.printer_name.toLowerCase().includes(q)) ||
+        item.user_id.toLowerCase().includes(q);
+
+      const matchesShop = 
+        historyShopFilter === 'all' || 
+        item.user_id === historyShopFilter;
+
+      const matchesColor = 
+        historyColorFilter === 'all' ||
+        (historyColorFilter === 'color' && item.color) ||
+        (historyColorFilter === 'bw' && !item.color);
+
+      return matchesSearch && matchesShop && matchesColor;
+    });
+  }, [globalAudits, historySearchQuery, historyShopFilter, historyColorFilter]);
+
   // Load audit logs when a shop is selected
   const handleSelectShop = async (shop: ShopSummary) => {
     setSelectedShop(shop);
@@ -352,8 +396,8 @@ export default function AdminDashboardContent() {
       "Shop Name", 
       "Shop ID", 
       "Owner Email", 
-      "Status", 
-      "Live Agent", 
+      "Service Status", 
+      "PC App Status", 
       "B&W Rate (₹)", 
       "Color Rate (₹)", 
       "Duplex Rate (₹)", 
@@ -716,11 +760,40 @@ export default function AdminDashboardContent() {
       {/* Top Navbar */}
       <header className="sticky top-0 z-30 bg-slate-900/90 backdrop-blur-md border-b border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex justify-between items-center">
-          <div className="flex items-center space-x-3">
-            <img src="/logo.png" alt="PrintBolt" className="w-8 h-8 rounded-lg object-contain" />
-            <div>
-              <span className="font-black text-lg tracking-tight text-white block leading-none">PrintBolt</span>
-              <span className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">Platform Operations</span>
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-3">
+              <img src="/logo.png" alt="PrintBolt" className="w-8 h-8 rounded-lg object-contain" />
+              <div>
+                <span className="font-black text-lg tracking-tight text-white block leading-none">PrintBolt</span>
+                <span className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">Platform Operations</span>
+              </div>
+            </div>
+
+            {/* Navigation Tabs */}
+            <div className="hidden sm:flex items-center space-x-1 bg-slate-950 p-1 rounded-2xl border border-slate-800 ml-4">
+              <button
+                onClick={() => setActiveTab('shops')}
+                className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
+                  activeTab === 'shops' 
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' 
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                <span>Partner Shops ({shops.length})</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('history')}
+                className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
+                  activeTab === 'history' 
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' 
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <History className="w-3.5 h-3.5" />
+                <span>All Print History ({globalAudits.length})</span>
+              </button>
             </div>
           </div>
 
@@ -730,13 +803,23 @@ export default function AdminDashboardContent() {
               <span className="truncate max-w-[180px]">{currentAdminUser.email}</span>
             </div>
 
-            <button
-              onClick={handleExportCSV}
-              className="hidden sm:flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-3.5 py-2 rounded-xl text-xs font-bold transition"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export CSV</span>
-            </button>
+            {activeTab === 'shops' ? (
+              <button
+                onClick={handleExportCSV}
+                className="hidden sm:flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-3.5 py-2 rounded-xl text-xs font-bold transition"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Export Summary CSV</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => exportAllAuditsToCSV(filteredGlobalAudits)}
+                className="hidden sm:flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition shadow-lg shadow-emerald-600/20"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Export Print History CSV</span>
+              </button>
+            )}
 
             <button
               onClick={loadData}
@@ -756,55 +839,34 @@ export default function AdminDashboardContent() {
             </button>
           </div>
         </div>
+
+        {/* Mobile Tab Switcher */}
+        <div className="flex sm:hidden border-t border-slate-800 bg-slate-950 p-1">
+          <button
+            onClick={() => setActiveTab('shops')}
+            className={`flex-1 py-2 text-xs font-bold rounded-xl flex items-center justify-center space-x-1.5 ${
+              activeTab === 'shops' ? 'bg-blue-600 text-white' : 'text-slate-400'
+            }`}
+          >
+            <Building2 className="w-3.5 h-3.5" />
+            <span>Partner Shops</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`flex-1 py-2 text-xs font-bold rounded-xl flex items-center justify-center space-x-1.5 ${
+              activeTab === 'history' ? 'bg-blue-600 text-white' : 'text-slate-400'
+            }`}
+          >
+            <History className="w-3.5 h-3.5" />
+            <span>All Print History</span>
+          </button>
+        </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-8">
-        {/* Timeframe Selector Pill Bar */}
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-slate-900/60 p-2.5 rounded-2xl border border-slate-800">
-          <div className="flex items-center space-x-2 text-xs font-extrabold text-slate-300 px-2">
-            <Calendar className="w-4 h-4 text-blue-400" />
-            <span>Activity Timeframe:</span>
-          </div>
-
-          <div className="flex items-center space-x-1.5 w-full sm:w-auto bg-slate-950 p-1 rounded-xl border border-slate-800">
-            <button
-              onClick={() => setTimeframe('today')}
-              className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
-                timeframe === 'today' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Today
-            </button>
-            <button
-              onClick={() => setTimeframe('weekly')}
-              className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
-                timeframe === 'weekly' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Weekly (7d)
-            </button>
-            <button
-              onClick={() => setTimeframe('monthly')}
-              className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
-                timeframe === 'monthly' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Monthly (30d)
-            </button>
-            <button
-              onClick={() => setTimeframe('all')}
-              className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
-                timeframe === 'all' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              All-Time
-            </button>
-          </div>
-        </div>
-
         {/* Dynamic Metric Cards Row */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          {/* Card 1: Partner Shops & Live Heartbeats */}
+          {/* Card 1: Partner Shops & Live PC Heartbeats */}
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm">
             <div className="flex justify-between items-start mb-3">
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Partner Shops</span>
@@ -817,7 +879,7 @@ export default function AdminDashboardContent() {
             </div>
             <div className="text-xs font-semibold text-emerald-400 mt-1 flex items-center space-x-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-              <span>{metrics?.onlineShopsCount || 0} online now</span>
+              <span>{metrics?.onlineShopsCount || 0} PC App Online</span>
               {metrics?.pausedShopsCount ? (
                 <span className="text-amber-400 font-bold ml-1">({metrics.pausedShopsCount} paused)</span>
               ) : null}
@@ -843,7 +905,7 @@ export default function AdminDashboardContent() {
           {/* Card 3: Revenue in Timeframe */}
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm">
             <div className="flex justify-between items-start mb-3">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Revenue in Timeframe</span>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Revenue ({timeframe})</span>
               <div className="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-2xl">
                 <IndianRupee className="w-5 h-5" />
               </div>
@@ -856,10 +918,10 @@ export default function AdminDashboardContent() {
             </div>
           </div>
 
-          {/* Card 4: All-Time Total Pages */}
+          {/* Card 4: All-Time Total Output */}
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm">
             <div className="flex justify-between items-start mb-3">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">All-Time Output</span>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Recorded Prints</span>
               <div className="p-2.5 bg-amber-500/10 text-amber-400 rounded-2xl">
                 <TrendingUp className="w-5 h-5" />
               </div>
@@ -873,249 +935,456 @@ export default function AdminDashboardContent() {
           </div>
         </div>
 
-        {/* Filter Controls & Search */}
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-slate-900 p-4 rounded-3xl border border-slate-800">
-          <div className="relative w-full sm:w-96">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by shop name, ID, owner email, phone..."
-              className="w-full bg-slate-950 border border-slate-800 text-xs text-white pl-10 pr-4 py-2.5 rounded-2xl focus:outline-none focus:border-blue-500 transition placeholder:text-slate-600"
-            />
-          </div>
+        {/* TAB 1: PARTNER SHOPS DIRECTORY & CONTROLS */}
+        {activeTab === 'shops' && (
+          <div className="space-y-6">
+            {/* Timeframe Selector Pill Bar */}
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-slate-900/60 p-2.5 rounded-2xl border border-slate-800">
+              <div className="flex items-center space-x-2 text-xs font-extrabold text-slate-300 px-2">
+                <Calendar className="w-4 h-4 text-blue-400" />
+                <span>Filter Metrics By Timeframe:</span>
+              </div>
 
-          <div className="flex items-center space-x-2 w-full sm:w-auto">
-            <button
-              onClick={() => setStatusFilter('all')}
-              className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold transition ${
-                statusFilter === 'all' 
-                  ? 'bg-blue-600 text-white' 
-                  : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
-              }`}
-            >
-              All ({shops.length})
-            </button>
-            <button
-              onClick={() => setStatusFilter('online')}
-              className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1 ${
-                statusFilter === 'online' 
-                  ? 'bg-emerald-600 text-white' 
-                  : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
-              }`}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-              <span>Online</span>
-            </button>
-            <button
-              onClick={() => setStatusFilter('offline')}
-              className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold transition ${
-                statusFilter === 'offline' 
-                  ? 'bg-slate-700 text-white' 
-                  : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
-              }`}
-            >
-              Offline
-            </button>
-            <button
-              onClick={() => setStatusFilter('paused')}
-              className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold transition ${
-                statusFilter === 'paused' 
-                  ? 'bg-amber-600 text-white' 
-                  : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
-              }`}
-            >
-              Paused
-            </button>
-          </div>
-        </div>
-
-        {/* Partner Shops Directory Table */}
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
-          <div className="px-6 py-4 border-b border-slate-800 flex justify-between items-center">
-            <h3 className="font-extrabold text-sm text-white tracking-wide uppercase">Partner Shops Directory</h3>
-            <span className="text-xs text-slate-400 font-bold">{filteredShops.length} shops found</span>
-          </div>
-
-          {loading ? (
-            <div className="p-16 text-center">
-              <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-              <span className="text-xs text-slate-400 font-bold">Loading partner shops activity...</span>
+              <div className="flex items-center space-x-1.5 w-full sm:w-auto bg-slate-950 p-1 rounded-xl border border-slate-800">
+                <button
+                  onClick={() => setTimeframe('today')}
+                  className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+                    timeframe === 'today' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Today
+                </button>
+                <button
+                  onClick={() => setTimeframe('weekly')}
+                  className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+                    timeframe === 'weekly' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Weekly (7d)
+                </button>
+                <button
+                  onClick={() => setTimeframe('monthly')}
+                  className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+                    timeframe === 'monthly' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Monthly (30d)
+                </button>
+                <button
+                  onClick={() => setTimeframe('all')}
+                  className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+                    timeframe === 'all' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  All-Time
+                </button>
+              </div>
             </div>
-          ) : filteredShops.length === 0 ? (
-            <div className="p-16 text-center text-slate-500">
-              <Building2 className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm font-bold text-slate-400">No partner shops match your query.</p>
-              <p className="text-xs mt-1">Try refining your search filter.</p>
+
+            {/* Filter Controls & Search */}
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-slate-900 p-4 rounded-3xl border border-slate-800">
+              <div className="relative w-full sm:w-96">
+                <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by shop name, ID, owner email, phone..."
+                  className="w-full bg-slate-950 border border-slate-800 text-xs text-white pl-10 pr-4 py-2.5 rounded-2xl focus:outline-none focus:border-blue-500 transition placeholder:text-slate-600"
+                />
+              </div>
+
+              <div className="flex items-center space-x-2 w-full sm:w-auto">
+                <button
+                  onClick={() => setStatusFilter('all')}
+                  className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold transition ${
+                    statusFilter === 'all' 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                  }`}
+                >
+                  All ({shops.length})
+                </button>
+                <button
+                  onClick={() => setStatusFilter('online')}
+                  className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1 ${
+                    statusFilter === 'online' 
+                      ? 'bg-emerald-600 text-white' 
+                      : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                  }`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                  <span>Online</span>
+                </button>
+                <button
+                  onClick={() => setStatusFilter('offline')}
+                  className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold transition ${
+                    statusFilter === 'offline' 
+                      ? 'bg-slate-700 text-white' 
+                      : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                  }`}
+                >
+                  Offline
+                </button>
+                <button
+                  onClick={() => setStatusFilter('paused')}
+                  className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold transition ${
+                    statusFilter === 'paused' 
+                      ? 'bg-amber-600 text-white' 
+                      : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                  }`}
+                >
+                  Paused
+                </button>
+              </div>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-950 text-slate-400 font-bold uppercase tracking-wider border-b border-slate-800 text-[10px]">
-                  <tr>
-                    <th className="py-3.5 px-6">Shop Details</th>
-                    <th className="py-3.5 px-4">Live Status</th>
-                    <th className="py-3.5 px-4 text-right">
-                      {timeframe === 'today' ? "Today's Volume" : timeframe === 'weekly' ? "Weekly Volume" : timeframe === 'monthly' ? "Monthly Volume" : "Total Volume"}
-                    </th>
-                    <th className="py-3.5 px-4 text-right">Revenue ({timeframe})</th>
-                    <th className="py-3.5 px-4">Shop Rates (View Only)</th>
-                    <th className="py-3.5 px-6 text-right">Service Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60 font-medium">
-                  {filteredShops.map((shop) => {
-                    const shopPages = timeframe === 'today' ? shop.today_pages : timeframe === 'weekly' ? shop.weekly_pages : timeframe === 'monthly' ? shop.monthly_pages : shop.total_pages;
-                    const shopRev = timeframe === 'today' ? shop.today_revenue : timeframe === 'weekly' ? shop.weekly_revenue : timeframe === 'monthly' ? shop.monthly_revenue : shop.total_revenue;
-                    const shopOrders = timeframe === 'today' ? shop.today_jobs : timeframe === 'weekly' ? shop.weekly_jobs : timeframe === 'monthly' ? shop.monthly_jobs : shop.total_jobs;
 
-                    return (
-                      <tr 
-                        key={shop.user_id} 
-                        onClick={() => handleSelectShop(shop)}
-                        className="hover:bg-slate-800/40 transition cursor-pointer group"
-                      >
-                        {/* Shop Details */}
-                        <td className="py-4 px-6">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 rounded-2xl bg-blue-500/10 text-blue-400 flex items-center justify-center font-black text-sm border border-blue-500/20 group-hover:scale-105 transition">
-                              {shop.shop_name.charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                              <div className="font-extrabold text-white text-sm group-hover:text-blue-400 transition flex items-center space-x-1.5">
-                                <span>{shop.shop_name}</span>
-                                <ChevronRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-blue-400 transition" />
-                              </div>
-                              <div className="text-[11px] text-slate-400 flex items-center space-x-2 mt-0.5">
-                                <span>{shop.email || shop.owner_name || 'No email registered'}</span>
-                                <span className="text-slate-600">•</span>
-                                <span className="font-mono text-[10px] text-slate-500">ID: {shop.user_id.substring(0, 8)}...</span>
-                              </div>
-                            </div>
-                          </div>
-                        </td>
+            {/* Partner Shops Directory Table */}
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
+              <div className="px-6 py-4 border-b border-slate-800 flex justify-between items-center">
+                <h3 className="font-extrabold text-sm text-white tracking-wide uppercase">Partner Shops Directory</h3>
+                <span className="text-xs text-slate-400 font-bold">{filteredShops.length} shops found</span>
+              </div>
 
-                        {/* Real-time Status */}
-                        <td className="py-4 px-4">
-                          <div className="flex flex-col space-y-1">
-                            {/* Service Status */}
-                            {shop.is_paused ? (
-                              <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/10 text-amber-400 border border-amber-500/20 w-max">
-                                <PauseCircle className="w-3 h-3" />
-                                <span>Service Paused</span>
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 w-max">
-                                <CheckCircle2 className="w-3 h-3" />
-                                <span>Service Active</span>
-                              </span>
-                            )}
-
-                            {/* Agent Online / Offline Indicator */}
-                            <span className="text-[10px] font-bold flex items-center space-x-1 text-slate-400">
-                              {shop.is_online ? (
-                                <>
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                                  <span className="text-emerald-400 font-bold">PC App Online</span>
-                                </>
-                              ) : (
-                                <>
-                                  <span className="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
-                                  <span>PC App Offline</span>
-                                </>
-                              )}
-                            </span>
-                          </div>
-                        </td>
-
-                        {/* Prints in Timeframe */}
-                        <td className="py-4 px-4 text-right">
-                          <div className="font-black text-white text-sm">
-                            {shopPages} <span className="text-[10px] font-semibold text-slate-400">pgs</span>
-                          </div>
-                          <div className="text-[10px] text-slate-500">
-                            {shopOrders} orders
-                          </div>
-                        </td>
-
-                        {/* Revenue in Timeframe */}
-                        <td className="py-4 px-4 text-right">
-                          <div className="font-black text-emerald-400 text-sm">
-                            ₹{shopRev.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </div>
-                          <div className="text-[10px] text-slate-500">
-                            All-Time: ₹{shop.total_revenue}
-                          </div>
-                        </td>
-
-                        {/* Rates Set by Shopkeeper (View Only) */}
-                        <td className="py-4 px-4">
-                          <div className="text-[11px] text-slate-300 font-semibold">
-                            B&W: <span className="text-white font-bold">₹{shop.bw_price}</span> • Color: <span className="text-purple-300 font-bold">₹{shop.color_price}</span>
-                          </div>
-                          <div className="text-[10px] text-slate-500">
-                            Duplex: ₹{shop.duplex_price}
-                          </div>
-                        </td>
-
-                        {/* Service Actions (Pause / Resume / Links) */}
-                        <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end space-x-1.5">
-                            {/* Pause / Resume Button */}
-                            <button
-                              onClick={(e) => handleTogglePause(shop, e)}
-                              disabled={actionLoading}
-                              className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1 ${
-                                shop.is_paused 
-                                  ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600/30' 
-                                  : 'bg-amber-600/20 text-amber-400 border border-amber-500/30 hover:bg-amber-600/30'
-                              }`}
-                              title={shop.is_paused ? "Resume Customer Order Intake" : "Pause Customer Order Intake"}
-                            >
-                              {shop.is_paused ? (
-                                <>
-                                  <PlayCircle className="w-3.5 h-3.5" />
-                                  <span>Resume</span>
-                                </>
-                              ) : (
-                                <>
-                                  <PauseCircle className="w-3.5 h-3.5" />
-                                  <span>Pause</span>
-                                </>
-                              )}
-                            </button>
-
-                            <button
-                              onClick={(e) => handleCopy(`https://printbolt.store/p?shopId=${shop.user_id}`, shop.user_id, e)}
-                              className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition"
-                              title="Copy Customer Counter Link"
-                            >
-                              {copiedId === shop.user_id ? (
-                                <Check className="w-3.5 h-3.5 text-emerald-400" />
-                              ) : (
-                                <Copy className="w-3.5 h-3.5" />
-                              )}
-                            </button>
-
-                            <Link
-                              href={`/p?shopId=${shop.user_id}`}
-                              target="_blank"
-                              className="p-2 text-slate-400 hover:text-blue-400 hover:bg-slate-800 rounded-xl transition"
-                              title="Open Customer Counter Portal"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                            </Link>
-                          </div>
-                        </td>
+              {loading ? (
+                <div className="p-16 text-center">
+                  <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+                  <span className="text-xs text-slate-400 font-bold">Loading partner shops activity...</span>
+                </div>
+              ) : filteredShops.length === 0 ? (
+                <div className="p-16 text-center text-slate-500">
+                  <Building2 className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm font-bold text-slate-400">No partner shops match your query.</p>
+                  <p className="text-xs mt-1">Try refining your search filter.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-950 text-slate-400 font-bold uppercase tracking-wider border-b border-slate-800 text-[10px]">
+                      <tr>
+                        <th className="py-3.5 px-6">Shop Details</th>
+                        <th className="py-3.5 px-4">Live Status</th>
+                        <th className="py-3.5 px-4 text-right">
+                          {timeframe === 'today' ? "Today's Volume" : timeframe === 'weekly' ? "Weekly Volume" : timeframe === 'monthly' ? "Monthly Volume" : "Total Volume"}
+                        </th>
+                        <th className="py-3.5 px-4 text-right">Revenue ({timeframe})</th>
+                        <th className="py-3.5 px-4">Shop Rates (View Only)</th>
+                        <th className="py-3.5 px-6 text-right">Service Actions</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60 font-medium">
+                      {filteredShops.map((shop) => {
+                        const shopPages = timeframe === 'today' ? shop.today_pages : timeframe === 'weekly' ? shop.weekly_pages : timeframe === 'monthly' ? shop.monthly_pages : shop.total_pages;
+                        const shopRev = timeframe === 'today' ? shop.today_revenue : timeframe === 'weekly' ? shop.weekly_revenue : timeframe === 'monthly' ? shop.monthly_revenue : shop.total_revenue;
+                        const shopOrders = timeframe === 'today' ? shop.today_jobs : timeframe === 'weekly' ? shop.weekly_jobs : timeframe === 'monthly' ? shop.monthly_jobs : shop.total_jobs;
+
+                        return (
+                          <tr 
+                            key={shop.user_id} 
+                            onClick={() => handleSelectShop(shop)}
+                            className="hover:bg-slate-800/40 transition cursor-pointer group"
+                          >
+                            <td className="py-4 px-6">
+                              <div className="flex items-center space-x-3">
+                                <div className="w-10 h-10 rounded-2xl bg-blue-500/10 text-blue-400 flex items-center justify-center font-black text-sm border border-blue-500/20 group-hover:scale-105 transition">
+                                  {shop.shop_name.charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                  <div className="font-extrabold text-white text-sm group-hover:text-blue-400 transition flex items-center space-x-1.5">
+                                    <span>{shop.shop_name}</span>
+                                    <ChevronRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-blue-400 transition" />
+                                  </div>
+                                  <div className="text-[11px] text-slate-400 flex items-center space-x-2 mt-0.5">
+                                    <span>{shop.email || shop.owner_name || 'No email registered'}</span>
+                                    <span className="text-slate-600">•</span>
+                                    <span className="font-mono text-[10px] text-slate-500">ID: {shop.user_id.substring(0, 8)}...</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+
+                            <td className="py-4 px-4">
+                              <div className="flex flex-col space-y-1">
+                                {shop.is_paused ? (
+                                  <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/10 text-amber-400 border border-amber-500/20 w-max">
+                                    <PauseCircle className="w-3 h-3" />
+                                    <span>Service Paused</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 w-max">
+                                    <CheckCircle2 className="w-3 h-3" />
+                                    <span>Service Active</span>
+                                  </span>
+                                )}
+
+                                <span className="text-[10px] font-bold flex items-center space-x-1 text-slate-400">
+                                  {shop.is_online ? (
+                                    <>
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                      <span className="text-emerald-400 font-bold">PC App Online</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
+                                      <span>PC App Closed</span>
+                                    </>
+                                  )}
+                                </span>
+                              </div>
+                            </td>
+
+                            <td className="py-4 px-4 text-right">
+                              <div className="font-black text-white text-sm">
+                                {shopPages} <span className="text-[10px] font-semibold text-slate-400">pgs</span>
+                              </div>
+                              <div className="text-[10px] text-slate-500">
+                                {shopOrders} orders
+                              </div>
+                            </td>
+
+                            <td className="py-4 px-4 text-right">
+                              <div className="font-black text-emerald-400 text-sm">
+                                ₹{shopRev.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </div>
+                              <div className="text-[10px] text-slate-500">
+                                All-Time: ₹{shop.total_revenue}
+                              </div>
+                            </td>
+
+                            <td className="py-4 px-4">
+                              <div className="text-[11px] text-slate-300 font-semibold">
+                                B&W: <span className="text-white font-bold">₹{shop.bw_price}</span> • Color: <span className="text-purple-300 font-bold">₹{shop.color_price}</span>
+                              </div>
+                              <div className="text-[10px] text-slate-500">
+                                Duplex: ₹{shop.duplex_price}
+                              </div>
+                            </td>
+
+                            <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center justify-end space-x-1.5">
+                                <button
+                                  onClick={(e) => handleTogglePause(shop, e)}
+                                  disabled={actionLoading}
+                                  className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1 ${
+                                    shop.is_paused 
+                                      ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600/30' 
+                                      : 'bg-amber-600/20 text-amber-400 border border-amber-500/30 hover:bg-amber-600/30'
+                                  }`}
+                                  title={shop.is_paused ? "Resume Customer Order Intake" : "Pause Customer Order Intake"}
+                                >
+                                  {shop.is_paused ? (
+                                    <>
+                                      <PlayCircle className="w-3.5 h-3.5" />
+                                      <span>Resume</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <PauseCircle className="w-3.5 h-3.5" />
+                                      <span>Pause</span>
+                                    </>
+                                  )}
+                                </button>
+
+                                <button
+                                  onClick={(e) => handleCopy(`https://printbolt.store/p?shopId=${shop.user_id}`, shop.user_id, e)}
+                                  className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition"
+                                  title="Copy Customer Counter Link"
+                                >
+                                  {copiedId === shop.user_id ? (
+                                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                  ) : (
+                                    <Copy className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+
+                                <Link
+                                  href={`/p?shopId=${shop.user_id}`}
+                                  target="_blank"
+                                  className="p-2 text-slate-400 hover:text-blue-400 hover:bg-slate-800 rounded-xl transition"
+                                  title="Open Customer Counter Portal"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </Link>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* TAB 2: GLOBAL PRINT HISTORY (ALL SHOPKEEPERS) */}
+        {activeTab === 'history' && (
+          <div className="space-y-6">
+            {/* Filter Bar for Global History */}
+            <div className="flex flex-col lg:flex-row justify-between items-center gap-4 bg-slate-900 p-4 rounded-3xl border border-slate-800">
+              <div className="relative w-full lg:w-80">
+                <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={historySearchQuery}
+                  onChange={(e) => setHistorySearchQuery(e.target.value)}
+                  placeholder="Search file name, printer, shop..."
+                  className="w-full bg-slate-950 border border-slate-800 text-xs text-white pl-10 pr-4 py-2.5 rounded-2xl focus:outline-none focus:border-blue-500 transition placeholder:text-slate-600"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+                {/* Filter by Shop */}
+                <div className="flex items-center space-x-1.5 bg-slate-950 px-3 py-1.5 rounded-2xl border border-slate-800 text-xs">
+                  <Building2 className="w-3.5 h-3.5 text-slate-500" />
+                  <select
+                    value={historyShopFilter}
+                    onChange={(e) => setHistoryShopFilter(e.target.value)}
+                    className="bg-transparent text-xs text-white font-bold focus:outline-none cursor-pointer"
+                  >
+                    <option value="all" className="bg-slate-900 text-white">All Shops ({shops.length})</option>
+                    {shops.map(s => (
+                      <option key={s.user_id} value={s.user_id} className="bg-slate-900 text-white">
+                        {s.shop_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Filter by Mode */}
+                <div className="flex items-center space-x-1.5 bg-slate-950 p-1 rounded-2xl border border-slate-800 text-xs">
+                  <button
+                    onClick={() => setHistoryColorFilter('all')}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition ${
+                      historyColorFilter === 'all' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    All Modes
+                  </button>
+                  <button
+                    onClick={() => setHistoryColorFilter('bw')}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition ${
+                      historyColorFilter === 'bw' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    B&W
+                  </button>
+                  <button
+                    onClick={() => setHistoryColorFilter('color')}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition ${
+                      historyColorFilter === 'color' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Color
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => exportAllAuditsToCSV(filteredGlobalAudits)}
+                  className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-2xl text-xs font-bold transition shadow-lg shadow-emerald-600/20"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download CSV</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Global History Table */}
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
+              <div className="px-6 py-4 border-b border-slate-800 flex justify-between items-center">
+                <div className="flex items-center space-x-2">
+                  <History className="w-4 h-4 text-blue-400" />
+                  <h3 className="font-extrabold text-sm text-white tracking-wide uppercase">Platform Master Print History</h3>
+                </div>
+                <span className="text-xs text-slate-400 font-bold">{filteredGlobalAudits.length} recorded print jobs</span>
+              </div>
+
+              {filteredGlobalAudits.length === 0 ? (
+                <div className="p-16 text-center text-slate-500">
+                  <Printer className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm font-bold text-slate-400">No print records match your criteria.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto max-h-[600px] overflow-y-auto custom-scrollbar">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-950 text-slate-400 font-bold uppercase tracking-wider border-b border-slate-800 text-[10px] sticky top-0 z-10">
+                      <tr>
+                        <th className="py-3.5 px-6">Date & Time</th>
+                        <th className="py-3.5 px-4">Partner Shop</th>
+                        <th className="py-3.5 px-4">File Name</th>
+                        <th className="py-3.5 px-3 text-right">Pages</th>
+                        <th className="py-3.5 px-4">Mode & Duplex</th>
+                        <th className="py-3.5 px-4 text-right">Amount</th>
+                        <th className="py-3.5 px-4">Printer</th>
+                        <th className="py-3.5 px-6 text-right">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60 font-medium">
+                      {filteredGlobalAudits.map((item) => (
+                        <tr key={item.id} className="hover:bg-slate-800/40 transition">
+                          <td className="py-3.5 px-6 text-slate-400 font-mono text-[11px] whitespace-nowrap">
+                            {new Date(item.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}{' '}
+                            <span className="text-slate-500">{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </td>
+
+                          <td className="py-3.5 px-4">
+                            <span className="font-extrabold text-white block truncate max-w-[160px]">{item.shop_name}</span>
+                            <span className="font-mono text-[9px] text-slate-500 block">ID: {item.user_id.substring(0, 8)}...</span>
+                          </td>
+
+                          <td className="py-3.5 px-4">
+                            <span className="font-semibold text-slate-200 block truncate max-w-[180px]">{item.file_name}</span>
+                          </td>
+
+                          <td className="py-3.5 px-3 text-right">
+                            <div className="font-black text-white">
+                              {Math.max(1, item.pages || 1) * Math.max(1, item.copies || 1)} <span className="text-[10px] text-slate-500 font-normal">pgs</span>
+                            </div>
+                            <div className="text-[10px] text-slate-500">
+                              {item.pages}p × {item.copies}c
+                            </div>
+                          </td>
+
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center space-x-1.5">
+                              {item.color ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-black bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                                  Color
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300">
+                                  B&W
+                                </span>
+                              )}
+                              <span className="text-[10px] text-slate-500">
+                                {item.duplex ? '2-Sided' : '1-Sided'}
+                              </span>
+                            </div>
+                          </td>
+
+                          <td className="py-3.5 px-4 text-right">
+                            <span className="font-black text-emerald-400 text-sm">₹{item.amount}</span>
+                          </td>
+
+                          <td className="py-3.5 px-4 text-slate-400 text-[11px] truncate max-w-[140px]">
+                            {item.printer_name || 'Standard Printer'}
+                          </td>
+
+                          <td className="py-3.5 px-6 text-right">
+                            <span className="text-[9px] font-black uppercase text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                              {item.status || 'completed'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </main>
 
       {/* ========================================== */}
@@ -1131,12 +1400,12 @@ export default function AdminDashboardContent() {
                   <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest block">Shop Overview & Activity</span>
                   {selectedShop.is_online ? (
                     <span className="text-[10px] font-extrabold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 flex items-center space-x-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                      <span>Online</span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span>PC App Online</span>
                     </span>
                   ) : (
                     <span className="text-[10px] font-extrabold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">
-                      Offline
+                      PC App Closed
                     </span>
                   )}
                 </div>

@@ -94,6 +94,10 @@ export interface PrintAuditEntry {
   selected_pages?: string;
 }
 
+export interface GlobalPrintAuditEntry extends PrintAuditEntry {
+  shop_name: string;
+}
+
 // ==========================================
 // SUPER-ADMIN AUTHENTICATION & SINGLETON LOGIC
 // ==========================================
@@ -138,7 +142,7 @@ export async function checkAdminStatus(): Promise<AdminStatus> {
 }
 
 /**
- * Registers the one and only Super-Admin account (only possible when hasAdmin == false).
+ * Registers the one and only Super-Admin account.
  */
 export async function registerInitialAdmin(email: string, password: string): Promise<{ success: boolean; error?: string }> {
   if (isDemoMode || !supabase) {
@@ -150,13 +154,11 @@ export async function registerInitialAdmin(email: string, password: string): Pro
   }
 
   try {
-    // 1. Double-check that no admin exists
     const status = await checkAdminStatus();
     if (status.hasAdmin) {
       return { success: false, error: "An admin account already exists. Only one admin is permitted." };
     }
 
-    // 2. Sign up via Supabase Auth
     const { data: authData, error: authErr } = await supabase.auth.signUp({
       email,
       password,
@@ -173,7 +175,6 @@ export async function registerInitialAdmin(email: string, password: string): Pro
       return { success: false, error: "Failed to create user." };
     }
 
-    // 3. Record in platform_admin singleton table
     const { error: insertErr } = await supabase
       .from('platform_admin')
       .insert({
@@ -253,7 +254,7 @@ export async function sendAdminPasswordReset(email: string): Promise<{ success: 
 }
 
 /**
- * Updates the admin's password (used when following a reset link).
+ * Updates the admin's password.
  */
 export async function updateAdminPassword(newPassword: string): Promise<{ success: boolean; error?: string }> {
   if (isDemoMode || !supabase) {
@@ -337,7 +338,7 @@ export async function getAllShopsWithMetrics(): Promise<{ shops: ShopSummary[]; 
         duplex_price: 1.5,
         is_active: true,
         is_paused: false,
-        last_seen_at: new Date(now - 2 * 60000).toISOString(),
+        last_seen_at: new Date(now - 30 * 1000).toISOString(),
         is_online: true,
         created_at: "2026-08-01T10:00:00Z",
         total_jobs: 142,
@@ -354,7 +355,7 @@ export async function getAllShopsWithMetrics(): Promise<{ shops: ShopSummary[]; 
         monthly_jobs: 142,
         monthly_pages: 580,
         monthly_revenue: 2120,
-        last_activity: new Date(now - 2 * 60000).toISOString()
+        last_activity: new Date(now - 30 * 1000).toISOString()
       },
       {
         user_id: "b7e21a44-8833-4f91-99cc-11aa22bb33cc",
@@ -413,7 +414,6 @@ export async function getAllShopsWithMetrics(): Promise<{ shops: ShopSummary[]; 
   }
 
   try {
-    // 1. Fetch shops via RPC or fallback
     let rawShops: any[] = [];
     const { data: rpcShops, error: rpcErr } = await supabase.rpc('get_all_shops_for_admin');
 
@@ -424,26 +424,21 @@ export async function getAllShopsWithMetrics(): Promise<{ shops: ShopSummary[]; 
       rawShops = directShops || [];
     }
 
-    // 2. Fetch all print audits
-    const { data: auditsData } = await supabase.from('print_audits').select('*');
+    const { data: auditsData } = await supabase.from('print_audits').select('*').order('created_at', { ascending: false });
     const audits: PrintAuditEntry[] = auditsData || [];
 
     const now = Date.now();
     const oneDayAgo = now - 24 * 60 * 60 * 1000;
     const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
     const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
-    const tenMinutesAgo = now - 10 * 60 * 1000; // Online heartbeat threshold
+    // 90 seconds threshold: If desktop agent heartbeat was received within 90s, mark Online
+    const onlineThreshold = now - 90 * 1000;
 
     const shops: ShopSummary[] = rawShops.map((shop: any) => {
       const shopAudits = audits.filter(a => a.user_id === shop.user_id);
       
-      // Determine real-time Online/Offline status
       let lastActivityTime = shop.last_seen_at ? new Date(shop.last_seen_at).getTime() : 0;
-      if (shopAudits[0]?.created_at) {
-        const auditTime = new Date(shopAudits[0].created_at).getTime();
-        if (auditTime > lastActivityTime) lastActivityTime = auditTime;
-      }
-      const isOnline = lastActivityTime >= tenMinutesAgo;
+      const isOnline = lastActivityTime >= onlineThreshold;
 
       let total_bw_pages = 0;
       let total_color_pages = 0;
@@ -475,21 +470,18 @@ export async function getAllShopsWithMetrics(): Promise<{ shops: ShopSummary[]; 
         }
         total_revenue += amount;
 
-        // Today
         if (auditTimestamp >= oneDayAgo) {
           today_jobs++;
           today_pages += count;
           today_revenue += amount;
         }
 
-        // Weekly
         if (auditTimestamp >= sevenDaysAgo) {
           weekly_jobs++;
           weekly_pages += count;
           weekly_revenue += amount;
         }
 
-        // Monthly
         if (auditTimestamp >= thirtyDaysAgo) {
           monthly_jobs++;
           monthly_pages += count;
@@ -622,7 +614,7 @@ export async function getShopAuditLogs(shopId: string): Promise<PrintAuditEntry[
       .select('*')
       .eq('user_id', shopId)
       .order('created_at', { ascending: false })
-      .limit(200);
+      .limit(300);
 
     if (error) throw error;
     return data || [];
@@ -633,7 +625,66 @@ export async function getShopAuditLogs(shopId: string): Promise<PrintAuditEntry[
 }
 
 /**
- * Toggles a shop's service pause state (Pause / Resume Service).
+ * Fetches all print history across ALL partner shopkeepers on the platform.
+ */
+export async function getAllPlatformPrintAudits(shops: ShopSummary[]): Promise<GlobalPrintAuditEntry[]> {
+  if (isDemoMode || !supabase) {
+    return [
+      {
+        id: "audit_101",
+        user_id: "aae78ccf-4e27-4b11-b6fb-d4c84c919ad7",
+        shop_name: "PrintBolt Flagship Express",
+        file_name: "College_Thesis_Final.pdf",
+        pages: 32,
+        copies: 2,
+        color: false,
+        duplex: true,
+        amount: 64.0,
+        status: "completed",
+        printer_name: "Canon imageRUNNER 2520",
+        created_at: new Date(Date.now() - 10 * 60000).toISOString()
+      },
+      {
+        id: "audit_102",
+        user_id: "b7e21a44-8833-4f91-99cc-11aa22bb33cc",
+        shop_name: "Campus Xerox & Digital Hub",
+        file_name: "Lab_Manual_Physics.pdf",
+        pages: 12,
+        copies: 1,
+        color: true,
+        duplex: false,
+        amount: 96.0,
+        status: "completed",
+        printer_name: "Epson L8050 Color",
+        created_at: new Date(Date.now() - 35 * 60000).toISOString()
+      }
+    ];
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('print_audits')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(500);
+
+    if (error) throw error;
+
+    const shopMap = new Map<string, string>();
+    shops.forEach(s => shopMap.set(s.user_id, s.shop_name));
+
+    return (data || []).map((a: any) => ({
+      ...a,
+      shop_name: shopMap.get(a.user_id) || `Shop (${a.user_id?.substring(0, 8)}...)`
+    }));
+  } catch (error) {
+    console.error("adminApi: getAllPlatformPrintAudits failed", error);
+    return [];
+  }
+}
+
+/**
+ * Toggles a shop's service pause state.
  */
 export async function toggleShopPause(shopId: string, isPaused: boolean): Promise<boolean> {
   if (isDemoMode || !supabase) {
@@ -702,6 +753,39 @@ export function exportShopAuditsToCSV(shop: ShopSummary, audits: PrintAuditEntry
   const link = document.createElement("a");
   link.setAttribute("href", encodedUri);
   link.setAttribute("download", `PrintBolt_${shop.shop_name.replace(/\s+/g, '_')}_Activity_${new Date().toISOString().split('T')[0]}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+/**
+ * Exports platform-wide complete print history to a CSV file.
+ */
+export function exportAllAuditsToCSV(audits: GlobalPrintAuditEntry[]): void {
+  if (audits.length === 0) return;
+
+  const headers = ["Date & Time", "Shop Name", "Shop ID", "File Name", "Pages", "Copies", "Total Pages", "Print Mode", "Duplex", "Amount (₹)", "Status", "Printer"];
+
+  const rows = audits.map(a => [
+    `"${new Date(a.created_at).toLocaleString()}"`,
+    `"${(a.shop_name || '').replace(/"/g, '""')}"`,
+    a.user_id,
+    `"${(a.file_name || '').replace(/"/g, '""')}"`,
+    a.pages,
+    a.copies,
+    Math.max(1, a.pages || 1) * Math.max(1, a.copies || 1),
+    a.color ? "Color" : "B&W",
+    a.duplex ? "Double-Sided" : "Single-Sided",
+    a.amount,
+    a.status,
+    `"${(a.printer_name || '').replace(/"/g, '""')}"`
+  ]);
+
+  const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", `PrintBolt_Master_Print_History_${new Date().toISOString().split('T')[0]}.csv`);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
