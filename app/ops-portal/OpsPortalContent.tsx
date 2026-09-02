@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { 
   Building2, 
   Printer, 
@@ -22,26 +22,26 @@ import {
   X, 
   Lock, 
   Copy, 
-  Check,
-  ChevronRight,
-  Eye,
-  Mail,
-  LogOut,
-  AlertCircle,
-  ArrowLeft,
-  UserCheck,
-  PauseCircle,
-  PlayCircle,
-  Trash2,
-  Calendar,
-  Radio,
-  Wifi,
-  WifiOff,
-  AlertTriangle,
-  History,
-  Filter,
-  ArrowUpRight,
-  FileSpreadsheet
+  Check, 
+  ChevronRight, 
+  Eye, 
+  Mail, 
+  LogOut, 
+  AlertCircle, 
+  ArrowLeft, 
+  UserCheck, 
+  PauseCircle, 
+  PlayCircle, 
+  Trash2, 
+  Calendar, 
+  Radio, 
+  Wifi, 
+  WifiOff, 
+  AlertTriangle, 
+  History, 
+  Filter, 
+  ArrowUpRight, 
+  FileSpreadsheet 
 } from 'lucide-react';
 import { 
   checkAdminStatus, 
@@ -68,20 +68,18 @@ type AuthViewMode = 'login' | 'register_initial' | 'forgot_password' | 'set_new_
 type TimeframeMode = 'today' | 'weekly' | 'monthly' | 'all';
 type AdminTabMode = 'shops' | 'history';
 
-export default function AdminDashboardContent() {
+export default function OpsPortalContent() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const resetModeParam = searchParams.get('mode') === 'reset';
   const urlShopId = searchParams.get('shopId');
 
   // Authentication State
   const [authChecking, setAuthChecking] = useState(true);
   const [hasRegisteredAdmin, setHasRegisteredAdmin] = useState(true);
-  const [registeredAdminEmail, setRegisteredAdminEmail] = useState<string | null>(null);
   const [currentAdminUser, setCurrentAdminUser] = useState<any | null>(null);
   const [authView, setAuthView] = useState<AuthViewMode>('login');
 
-  // Auth Form Fields
+  // Anonymous Auth Form Fields (NEVER leak admin email)
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
@@ -125,10 +123,6 @@ export default function AdminDashboardContent() {
       try {
         const status = await checkAdminStatus();
         setHasRegisteredAdmin(status.hasAdmin);
-        if (status.adminEmail) {
-          setRegisteredAdminEmail(status.adminEmail);
-          setEmailInput(status.adminEmail);
-        }
 
         if (!status.hasAdmin) {
           setAuthView('register_initial');
@@ -210,11 +204,10 @@ export default function AdminDashboardContent() {
       const res = await registerInitialAdmin(emailInput, passwordInput);
       if (res.success) {
         setHasRegisteredAdmin(true);
-        setRegisteredAdminEmail(emailInput);
-        setAuthSuccess('Admin account created successfully! Please log in.');
+        setAuthSuccess('Administrator account initialized. Please log in.');
         setAuthView('login');
       } else {
-        setAuthError(res.error || 'Failed to create initial admin account.');
+        setAuthError(res.error || 'Failed to initialize administrator account.');
       }
     } catch (err: any) {
       setAuthError(err.message || 'Registration failed.');
@@ -223,7 +216,7 @@ export default function AdminDashboardContent() {
     }
   };
 
-  // 2. Handle Admin Login
+  // 2. Handle Admin Login (Strictly Anonymous & Secure)
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
@@ -235,10 +228,10 @@ export default function AdminDashboardContent() {
       if (res.success && res.user) {
         setCurrentAdminUser(res.user);
       } else {
-        setAuthError(res.error || 'Invalid email or password.');
+        setAuthError(res.error || 'Invalid credentials.');
       }
     } catch (err: any) {
-      setAuthError(err.message || 'Login failed.');
+      setAuthError('Invalid credentials.');
     } finally {
       setSubmittingAuth(false);
     }
@@ -254,12 +247,12 @@ export default function AdminDashboardContent() {
     try {
       const res = await sendAdminPasswordReset(emailInput);
       if (res.success) {
-        setAuthSuccess('Password reset link sent! Check your inbox to set a new password.');
+        setAuthSuccess('If this account exists, a recovery link has been dispatched.');
       } else {
-        setAuthError(res.error || 'Could not send reset email.');
+        setAuthError(res.error || 'Request failed.');
       }
     } catch (err: any) {
-      setAuthError(err.message || 'Failed to send reset email.');
+      setAuthError('Request failed.');
     } finally {
       setSubmittingAuth(false);
     }
@@ -303,6 +296,7 @@ export default function AdminDashboardContent() {
   const handleLogout = async () => {
     await logoutAdmin();
     setCurrentAdminUser(null);
+    setEmailInput('');
     setPasswordInput('');
     setAuthView('login');
   };
@@ -502,13 +496,13 @@ export default function AdminDashboardContent() {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400">
         <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mb-3"></div>
-        <span className="text-xs font-bold">Verifying Super-Admin Access...</span>
+        <span className="text-xs font-bold">Verifying Gateway Access...</span>
       </div>
     );
   }
 
   // ==========================================
-  // 1. AUTHENTICATION & SINGLE-ADMIN SCREENS
+  // 1. COMPLETELY ANONYMOUS AUTHENTICATION SCREEN
   // ==========================================
   if (!currentAdminUser) {
     return (
@@ -516,18 +510,18 @@ export default function AdminDashboardContent() {
         <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6">
           <div className="text-center">
             <div className="w-16 h-16 bg-blue-600/20 text-blue-400 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-blue-500/30">
-              <ShieldCheck className="w-8 h-8" />
+              <Lock className="w-8 h-8" />
             </div>
             <h2 className="text-2xl font-black text-white tracking-tight">
-              {authView === 'register_initial' && 'Create Super-Admin Account'}
-              {authView === 'login' && 'Super-Admin Login'}
-              {authView === 'forgot_password' && 'Reset Admin Password'}
-              {authView === 'set_new_password' && 'Set New Password'}
+              {authView === 'register_initial' && 'Initialize Security Portal'}
+              {authView === 'login' && 'Authorized Access Only'}
+              {authView === 'forgot_password' && 'Account Recovery'}
+              {authView === 'set_new_password' && 'Set New Credentials'}
             </h2>
             <p className="text-xs text-slate-400 font-medium mt-1">
-              {authView === 'register_initial' && 'Initial setup: Register the one and only master administrator account.'}
-              {authView === 'login' && 'Log in with your verified email and password. Session persists securely.'}
-              {authView === 'forgot_password' && 'Enter your registered admin email to receive a password reset link.'}
+              {authView === 'register_initial' && 'Create the root administrator credentials.'}
+              {authView === 'login' && 'Enter verified credentials to authenticate session.'}
+              {authView === 'forgot_password' && 'Enter registered identifier to receive recovery instructions.'}
               {authView === 'set_new_password' && 'Enter your new secure password below.'}
             </p>
           </div>
@@ -559,7 +553,7 @@ export default function AdminDashboardContent() {
                     required
                     value={emailInput}
                     onChange={(e) => setEmailInput(e.target.value)}
-                    placeholder="admin@printbolt.store"
+                    placeholder="Enter email"
                     className="w-full bg-slate-950 border border-slate-800 text-xs text-white pl-10 pr-4 py-3 rounded-2xl focus:outline-none focus:border-blue-500 transition"
                   />
                 </div>
@@ -601,10 +595,6 @@ export default function AdminDashboardContent() {
                 </div>
               </div>
 
-              <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-2xl text-[11px] text-blue-300">
-                🔒 <strong>Singleton Protection</strong>: Once created, no other admin account can be registered.
-              </div>
-
               <button
                 type="submit"
                 disabled={submittingAuth}
@@ -613,7 +603,7 @@ export default function AdminDashboardContent() {
                 {submittingAuth ? (
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                 ) : (
-                  'Claim & Initialize Admin'
+                  'Initialize Administrator'
                 )}
               </button>
             </form>
@@ -623,7 +613,7 @@ export default function AdminDashboardContent() {
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-300 uppercase tracking-wide mb-1.5">
-                  Verified Admin Email
+                  Email
                 </label>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -632,7 +622,7 @@ export default function AdminDashboardContent() {
                     required
                     value={emailInput}
                     onChange={(e) => setEmailInput(e.target.value)}
-                    placeholder="admin@printbolt.store"
+                    placeholder="Enter email"
                     className="w-full bg-slate-950 border border-slate-800 text-xs text-white pl-10 pr-4 py-3 rounded-2xl focus:outline-none focus:border-blue-500 transition"
                   />
                 </div>
@@ -662,7 +652,7 @@ export default function AdminDashboardContent() {
                     required
                     value={passwordInput}
                     onChange={(e) => setPasswordInput(e.target.value)}
-                    placeholder="Enter admin password"
+                    placeholder="Enter password"
                     className="w-full bg-slate-950 border border-slate-800 text-xs text-white pl-10 pr-4 py-3 rounded-2xl focus:outline-none focus:border-blue-500 transition"
                   />
                 </div>
@@ -676,16 +666,9 @@ export default function AdminDashboardContent() {
                 {submittingAuth ? (
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                 ) : (
-                  'Log In to Admin Dashboard'
+                  'Authenticate & Enter'
                 )}
               </button>
-
-              <div className="text-center pt-2">
-                <span className="text-[11px] text-slate-500 font-semibold flex items-center justify-center space-x-1">
-                  <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Single Admin Registered: {registeredAdminEmail || 'Configured'}</span>
-                </span>
-              </div>
             </form>
           )}
 
@@ -693,7 +676,7 @@ export default function AdminDashboardContent() {
             <form onSubmit={handleForgotPassword} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-300 uppercase tracking-wide mb-1.5">
-                  Enter Verified Admin Email
+                  Account Email
                 </label>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -702,7 +685,7 @@ export default function AdminDashboardContent() {
                     required
                     value={emailInput}
                     onChange={(e) => setEmailInput(e.target.value)}
-                    placeholder="admin@printbolt.store"
+                    placeholder="Enter registered email"
                     className="w-full bg-slate-950 border border-slate-800 text-xs text-white pl-10 pr-4 py-3 rounded-2xl focus:outline-none focus:border-blue-500 transition"
                   />
                 </div>
@@ -716,7 +699,7 @@ export default function AdminDashboardContent() {
                 {submittingAuth ? (
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                 ) : (
-                  'Send Password Reset Link'
+                  'Dispatch Recovery Link'
                 )}
               </button>
 

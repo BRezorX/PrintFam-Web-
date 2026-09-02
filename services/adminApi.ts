@@ -109,35 +109,30 @@ export interface AdminStatus {
 
 /**
  * Checks whether an admin account has already been claimed / initialized.
+ * NEVER leaks or exposes the admin's email address.
  */
 export async function checkAdminStatus(): Promise<AdminStatus> {
   if (isDemoMode || !supabase) {
     const localClaimed = typeof window !== 'undefined' ? localStorage.getItem('printbolt_mock_admin_claimed') : null;
     return {
-      hasAdmin: localClaimed === 'true',
-      adminEmail: localClaimed === 'true' ? 'admin@printbolt.store' : undefined
+      hasAdmin: localClaimed === 'true'
     };
   }
 
   try {
-    const { data, error } = await supabase
-      .from('platform_admin')
-      .select('email')
-      .limit(1);
-
-    if (error) throw error;
-
-    if (data && data.length > 0) {
-      return {
-        hasAdmin: true,
-        adminEmail: data[0].email
-      };
+    const { data, error } = await supabase.rpc('is_admin_initialized');
+    if (!error && typeof data === 'boolean') {
+      return { hasAdmin: data };
     }
 
-    return { hasAdmin: false };
+    const { count } = await supabase
+      .from('platform_admin')
+      .select('*', { count: 'exact', head: true });
+
+    return { hasAdmin: (count || 0) > 0 };
   } catch (err) {
     console.error("adminApi: checkAdminStatus error", err);
-    return { hasAdmin: false };
+    return { hasAdmin: true };
   }
 }
 
@@ -156,14 +151,14 @@ export async function registerInitialAdmin(email: string, password: string): Pro
   try {
     const status = await checkAdminStatus();
     if (status.hasAdmin) {
-      return { success: false, error: "An admin account already exists. Only one admin is permitted." };
+      return { success: false, error: "An admin account already exists. Registration is locked." };
     }
 
     const { data: authData, error: authErr } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/admin` : 'https://printbolt.store/admin'
+        emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/ops-portal` : 'https://printbolt.store/ops-portal'
       }
     });
 
@@ -193,7 +188,7 @@ export async function registerInitialAdmin(email: string, password: string): Pro
 }
 
 /**
- * Logs in the verified Super-Admin.
+ * Logs in the verified Super-Admin anonymously.
  */
 export async function loginAdmin(email: string, password: string): Promise<{ success: boolean; error?: string; user?: any }> {
   if (isDemoMode || !supabase) {
@@ -201,32 +196,34 @@ export async function loginAdmin(email: string, password: string): Promise<{ suc
   }
 
   try {
-    const status = await checkAdminStatus();
-    if (!status.hasAdmin) {
-      return { success: false, error: "No admin account is registered yet. Please create the initial admin account." };
-    }
-
-    if (status.adminEmail && status.adminEmail.toLowerCase() !== email.trim().toLowerCase()) {
-      return { success: false, error: "Access denied. Only the registered platform admin can log in." };
-    }
-
     const { data, error } = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
       password
     });
 
-    if (error) {
-      return { success: false, error: error.message };
+    if (error || !data.user) {
+      return { success: false, error: "Invalid email or password." };
+    }
+
+    const { data: adminRecord, error: adminErr } = await supabase
+      .from('platform_admin')
+      .select('id')
+      .eq('user_id', data.user.id)
+      .maybeSingle();
+
+    if (adminErr || !adminRecord) {
+      await supabase.auth.signOut();
+      return { success: false, error: "Access denied. Not authorized as platform administrator." };
     }
 
     return { success: true, user: data.user };
   } catch (err: any) {
-    return { success: false, error: err?.message || "Login failed." };
+    return { success: false, error: "Invalid email or password." };
   }
 }
 
 /**
- * Requests a password reset email for the verified admin.
+ * Requests a password reset email for the admin.
  */
 export async function sendAdminPasswordReset(email: string): Promise<{ success: boolean; error?: string }> {
   if (isDemoMode || !supabase) {
@@ -234,13 +231,8 @@ export async function sendAdminPasswordReset(email: string): Promise<{ success: 
   }
 
   try {
-    const status = await checkAdminStatus();
-    if (!status.hasAdmin || (status.adminEmail && status.adminEmail.toLowerCase() !== email.trim().toLowerCase())) {
-      return { success: false, error: "This email is not registered as the platform admin." };
-    }
-
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-      redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/admin?mode=reset` : 'https://printbolt.store/admin?mode=reset'
+      redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/ops-portal?mode=reset` : 'https://printbolt.store/ops-portal?mode=reset'
     });
 
     if (error) {
@@ -287,10 +279,13 @@ export async function getVerifiedAdminUser(): Promise<any | null> {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session || !session.user) return null;
 
-    const status = await checkAdminStatus();
-    if (!status.hasAdmin || !status.adminEmail) return null;
+    const { data: adminRecord } = await supabase
+      .from('platform_admin')
+      .select('id')
+      .eq('user_id', session.user.id)
+      .maybeSingle();
 
-    if (session.user.email?.toLowerCase() === status.adminEmail.toLowerCase()) {
+    if (adminRecord) {
       return session.user;
     }
 
