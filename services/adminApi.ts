@@ -4,7 +4,7 @@ const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-const supabase = (!isDemoMode && supabaseUrl && supabaseAnonKey)
+export const supabase = (!isDemoMode && supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
@@ -60,12 +60,238 @@ export interface PrintAuditEntry {
   selected_pages?: string;
 }
 
+// ==========================================
+// SUPER-ADMIN AUTHENTICATION & SINGLETON LOGIC
+// ==========================================
+
+export interface AdminStatus {
+  hasAdmin: boolean;
+  adminEmail?: string;
+}
+
+/**
+ * Checks whether an admin account has already been claimed / initialized.
+ */
+export async function checkAdminStatus(): Promise<AdminStatus> {
+  if (isDemoMode || !supabase) {
+    const localClaimed = typeof window !== 'undefined' ? localStorage.getItem('printbolt_mock_admin_claimed') : null;
+    return {
+      hasAdmin: localClaimed === 'true',
+      adminEmail: localClaimed === 'true' ? 'admin@printbolt.store' : undefined
+    };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('platform_admin')
+      .select('email')
+      .limit(1);
+
+    if (error) throw error;
+
+    if (data && data.length > 0) {
+      return {
+        hasAdmin: true,
+        adminEmail: data[0].email
+      };
+    }
+
+    return { hasAdmin: false };
+  } catch (err) {
+    console.error("adminApi: checkAdminStatus error", err);
+    return { hasAdmin: false };
+  }
+}
+
+/**
+ * Registers the one and only Super-Admin account (only possible when hasAdmin == false).
+ */
+export async function registerInitialAdmin(email: string, password: string): Promise<{ success: boolean; error?: string }> {
+  if (isDemoMode || !supabase) {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('printbolt_mock_admin_claimed', 'true');
+      localStorage.setItem('printbolt_mock_admin_email', email);
+    }
+    return { success: true };
+  }
+
+  try {
+    // 1. Double-check that no admin exists
+    const status = await checkAdminStatus();
+    if (status.hasAdmin) {
+      return { success: false, error: "An admin account already exists. Only one admin is permitted." };
+    }
+
+    // 2. Sign up via Supabase Auth
+    const { data: authData, error: authErr } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/admin` : 'https://printbolt.store/admin'
+      }
+    });
+
+    if (authErr) {
+      return { success: false, error: authErr.message };
+    }
+
+    if (!authData.user) {
+      return { success: false, error: "Failed to create user." };
+    }
+
+    // 3. Record in platform_admin singleton table
+    const { error: insertErr } = await supabase
+      .from('platform_admin')
+      .insert({
+        email: email.trim().toLowerCase(),
+        user_id: authData.user.id
+      });
+
+    if (insertErr) {
+      return { success: false, error: "Failed to initialize platform admin record: " + insertErr.message };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || "Registration failed." };
+  }
+}
+
+/**
+ * Logs in the verified Super-Admin.
+ */
+export async function loginAdmin(email: string, password: string): Promise<{ success: boolean; error?: string; user?: any }> {
+  if (isDemoMode || !supabase) {
+    return { success: true, user: { email } };
+  }
+
+  try {
+    // 1. Verify that this email is the registered admin
+    const status = await checkAdminStatus();
+    if (!status.hasAdmin) {
+      return { success: false, error: "No admin account is registered yet. Please create the initial admin account." };
+    }
+
+    if (status.adminEmail && status.adminEmail.toLowerCase() !== email.trim().toLowerCase()) {
+      return { success: false, error: "Access denied. Only the registered platform admin can log in." };
+    }
+
+    // 2. Authenticate with Supabase Auth
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password
+    });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, user: data.user };
+  } catch (err: any) {
+    return { success: false, error: err?.message || "Login failed." };
+  }
+}
+
+/**
+ * Requests a password reset email for the verified admin.
+ */
+export async function sendAdminPasswordReset(email: string): Promise<{ success: boolean; error?: string }> {
+  if (isDemoMode || !supabase) {
+    return { success: true };
+  }
+
+  try {
+    const status = await checkAdminStatus();
+    if (!status.hasAdmin || (status.adminEmail && status.adminEmail.toLowerCase() !== email.trim().toLowerCase())) {
+      return { success: false, error: "This email is not registered as the platform admin." };
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+      redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/admin?mode=reset` : 'https://printbolt.store/admin?mode=reset'
+    });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || "Password reset failed." };
+  }
+}
+
+/**
+ * Updates the admin's password (used when following a reset link).
+ */
+export async function updateAdminPassword(newPassword: string): Promise<{ success: boolean; error?: string }> {
+  if (isDemoMode || !supabase) {
+    return { success: true };
+  }
+
+  try {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || "Failed to update password." };
+  }
+}
+
+/**
+ * Checks if the current session belongs to the verified Super-Admin.
+ */
+export async function getVerifiedAdminUser(): Promise<any | null> {
+  if (isDemoMode || !supabase) {
+    if (typeof window !== 'undefined' && sessionStorage.getItem('printbolt_mock_admin_logged') === 'true') {
+      return { email: 'admin@printbolt.store' };
+    }
+    return null;
+  }
+
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session || !session.user) return null;
+
+    const status = await checkAdminStatus();
+    if (!status.hasAdmin || !status.adminEmail) return null;
+
+    if (session.user.email?.toLowerCase() === status.adminEmail.toLowerCase()) {
+      return session.user;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Signs out the admin session.
+ */
+export async function logoutAdmin(): Promise<void> {
+  if (isDemoMode || !supabase) {
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('printbolt_mock_admin_logged');
+    }
+    return;
+  }
+
+  try {
+    await supabase.auth.signOut();
+  } catch {}
+}
+
+// ==========================================
+// DATA & METRICS
+// ==========================================
+
 /**
  * Fetches all shops with their aggregated metrics and print volume.
  */
 export async function getAllShopsWithMetrics(): Promise<{ shops: ShopSummary[]; metrics: PlatformMetrics }> {
   if (isDemoMode || !supabase) {
-    // Mock data for demo/local sandbox
     const mockShops: ShopSummary[] = [
       {
         user_id: "aae78ccf-4e27-4b11-b6fb-d4c84c919ad7",
@@ -128,7 +354,6 @@ export async function getAllShopsWithMetrics(): Promise<{ shops: ShopSummary[]; 
   }
 
   try {
-    // 1. Fetch all shops from shop_settings
     const { data: shopsData, error: shopsErr } = await supabase
       .from('shop_settings')
       .select('*')
@@ -136,14 +361,12 @@ export async function getAllShopsWithMetrics(): Promise<{ shops: ShopSummary[]; 
 
     if (shopsErr) throw shopsErr;
 
-    // 2. Fetch all print audits to calculate true volume & revenue
     const { data: auditsData, error: auditsErr } = await supabase
       .from('print_audits')
       .select('*')
       .order('created_at', { ascending: false });
 
     const audits: PrintAuditEntry[] = auditsData || [];
-
     const todayDateStr = new Date().toISOString().split('T')[0];
 
     const shops: ShopSummary[] = (shopsData || []).map((shop: any) => {
