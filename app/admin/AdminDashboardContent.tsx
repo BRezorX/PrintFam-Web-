@@ -19,11 +19,8 @@ import {
   XCircle, 
   Layers, 
   Clock, 
-  Edit3, 
   X, 
-  Save, 
   Lock, 
-  KeyRound, 
   Copy, 
   Check,
   ChevronRight,
@@ -32,7 +29,15 @@ import {
   LogOut,
   AlertCircle,
   ArrowLeft,
-  UserCheck
+  UserCheck,
+  PauseCircle,
+  PlayCircle,
+  Trash2,
+  Calendar,
+  Radio,
+  Wifi,
+  WifiOff,
+  AlertTriangle
 } from 'lucide-react';
 import { 
   checkAdminStatus, 
@@ -44,13 +49,16 @@ import {
   logoutAdmin, 
   getAllShopsWithMetrics, 
   getShopAuditLogs, 
-  updateShopSettings, 
+  toggleShopPause, 
+  deleteShop, 
+  exportShopAuditsToCSV, 
   ShopSummary, 
   PlatformMetrics, 
   PrintAuditEntry 
 } from '../../services/adminApi';
 
 type AuthViewMode = 'login' | 'register_initial' | 'forgot_password' | 'set_new_password';
+type TimeframeMode = 'today' | 'weekly' | 'monthly' | 'all';
 
 export default function AdminDashboardContent() {
   const searchParams = useSearchParams();
@@ -76,21 +84,15 @@ export default function AdminDashboardContent() {
   const [metrics, setMetrics] = useState<PlatformMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'online' | 'offline' | 'paused'>('all');
+  const [timeframe, setTimeframe] = useState<TimeframeMode>('monthly');
 
   // Modal / Drawer State
   const [selectedShop, setSelectedShop] = useState<ShopSummary | null>(null);
   const [shopAudits, setShopAudits] = useState<PrintAuditEntry[]>([]);
   const [loadingAudits, setLoadingAudits] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editForm, setEditForm] = useState({
-    shop_name: '',
-    bw_price: 2.0,
-    color_price: 10.0,
-    duplex_price: 1.0,
-    is_active: true
-  });
-  const [savingEdit, setSavingEdit] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Check current session & admin existence on mount
@@ -113,7 +115,6 @@ export default function AdminDashboardContent() {
           setAuthView('login');
         }
 
-        // Check if an existing persistent session is already logged in
         const user = await getVerifiedAdminUser();
         if (user) {
           setCurrentAdminUser(user);
@@ -148,7 +149,7 @@ export default function AdminDashboardContent() {
     }
   }, [currentAdminUser]);
 
-  // 1. Handle Initial Admin Registration (Only when 0 admins exist)
+  // 1. Handle Initial Admin Registration
   const handleRegisterInitial = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
@@ -170,7 +171,7 @@ export default function AdminDashboardContent() {
       if (res.success) {
         setHasRegisteredAdmin(true);
         setRegisteredAdminEmail(emailInput);
-        setAuthSuccess('Admin account created successfully! If email confirmation is enabled, please verify your email before logging in.');
+        setAuthSuccess('Admin account created successfully! Please log in.');
         setAuthView('login');
       } else {
         setAuthError(res.error || 'Failed to create initial admin account.');
@@ -244,7 +245,7 @@ export default function AdminDashboardContent() {
     try {
       const res = await updateAdminPassword(passwordInput);
       if (res.success) {
-        setAuthSuccess('Password updated successfully! Please log in with your new password.');
+        setAuthSuccess('Password updated successfully! Please log in.');
         setPasswordInput('');
         setConfirmPasswordInput('');
         setAuthView('login');
@@ -266,6 +267,39 @@ export default function AdminDashboardContent() {
     setAuthView('login');
   };
 
+  // 6. Handle Service Pause / Resume
+  const handleTogglePause = async (shop: ShopSummary, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const newPauseState = !shop.is_paused;
+    setActionLoading(true);
+    try {
+      await toggleShopPause(shop.user_id, newPauseState);
+      await loadData();
+      if (selectedShop && selectedShop.user_id === shop.user_id) {
+        setSelectedShop({ ...selectedShop, is_paused: newPauseState });
+      }
+    } catch (err) {
+      alert("Failed to toggle shop service state.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // 7. Handle Delete / Remove Shop
+  const handleDeleteShop = async (shop: ShopSummary) => {
+    setActionLoading(true);
+    try {
+      await deleteShop(shop.user_id);
+      setShowDeleteConfirm(false);
+      setSelectedShop(null);
+      await loadData();
+    } catch (err) {
+      alert("Failed to remove shop.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // Filtered shops list
   const filteredShops = useMemo(() => {
     return shops.filter(shop => {
@@ -280,8 +314,9 @@ export default function AdminDashboardContent() {
 
       const matchesStatus = 
         statusFilter === 'all' ||
-        (statusFilter === 'active' && shop.is_active) ||
-        (statusFilter === 'inactive' && !shop.is_active);
+        (statusFilter === 'online' && shop.is_online) ||
+        (statusFilter === 'offline' && !shop.is_online) ||
+        (statusFilter === 'paused' && shop.is_paused);
 
       return matchesSearch && matchesStatus;
     });
@@ -301,37 +336,6 @@ export default function AdminDashboardContent() {
     }
   };
 
-  // Open Edit Modal
-  const handleOpenEdit = (shop: ShopSummary, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    setSelectedShop(shop);
-    setEditForm({
-      shop_name: shop.shop_name,
-      bw_price: shop.bw_price,
-      color_price: shop.color_price,
-      duplex_price: shop.duplex_price,
-      is_active: shop.is_active !== false
-    });
-    setShowEditModal(true);
-  };
-
-  // Save Shop Settings
-  const handleSaveSettings = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedShop) return;
-
-    setSavingEdit(true);
-    try {
-      await updateShopSettings(selectedShop.user_id, editForm);
-      setShowEditModal(false);
-      await loadData();
-    } catch (err) {
-      alert("Failed to update shop settings.");
-    } finally {
-      setSavingEdit(false);
-    }
-  };
-
   // Copy helper
   const handleCopy = (text: string, id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -340,39 +344,75 @@ export default function AdminDashboardContent() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  // Export CSV Report
+  // Export Overall Platform CSV Report
   const handleExportCSV = () => {
     if (shops.length === 0) return;
 
-    const headers = ["Shop Name", "Shop ID", "Owner", "Email", "Phone", "Status", "B&W Rate (₹)", "Color Rate (₹)", "Total Jobs", "Total Pages", "B&W Pages", "Color Pages", "Total Revenue (₹)", "Today Pages", "Today Revenue (₹)"];
+    const headers = [
+      "Shop Name", 
+      "Shop ID", 
+      "Owner Email", 
+      "Status", 
+      "Live Agent", 
+      "B&W Rate (₹)", 
+      "Color Rate (₹)", 
+      "Duplex Rate (₹)", 
+      "Today Pages", 
+      "Today Revenue (₹)", 
+      "Weekly Pages", 
+      "Weekly Revenue (₹)", 
+      "Monthly Pages", 
+      "Monthly Revenue (₹)", 
+      "Total Pages", 
+      "Total Revenue (₹)"
+    ];
     
     const rows = shops.map(s => [
       `"${s.shop_name.replace(/"/g, '""')}"`,
       s.user_id,
-      `"${(s.owner_name || '').replace(/"/g, '""')}"`,
       s.email || '',
-      s.phone || '',
-      s.is_active ? 'Active' : 'Inactive',
+      s.is_paused ? 'Paused' : (s.is_active ? 'Active' : 'Inactive'),
+      s.is_online ? 'Online' : 'Offline',
       s.bw_price,
       s.color_price,
-      s.total_jobs,
-      s.total_pages,
-      s.total_bw_pages,
-      s.total_color_pages,
-      s.total_revenue,
+      s.duplex_price,
       s.today_pages,
-      s.today_revenue
+      s.today_revenue,
+      s.weekly_pages,
+      s.weekly_revenue,
+      s.monthly_pages,
+      s.monthly_revenue,
+      s.total_pages,
+      s.total_revenue
     ]);
 
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `PrintBolt_Shops_Report_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `PrintBolt_Platform_Report_${timeframe}_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
+
+  // Helper to format Timeframe stats
+  const getTimeframeStats = () => {
+    if (!metrics) return { pages: 0, revenue: 0, jobs: 0, label: '' };
+    switch (timeframe) {
+      case 'today':
+        return { pages: metrics.todayPages, revenue: metrics.todayRevenue, jobs: metrics.todayJobs, label: "Today's Volume" };
+      case 'weekly':
+        return { pages: metrics.weeklyPages, revenue: metrics.weeklyRevenue, jobs: metrics.weeklyJobs, label: "Weekly Volume (7 Days)" };
+      case 'monthly':
+        return { pages: metrics.monthlyPages, revenue: metrics.monthlyRevenue, jobs: metrics.monthlyJobs, label: "Monthly Volume (30 Days)" };
+      case 'all':
+      default:
+        return { pages: metrics.totalPages, revenue: metrics.totalRevenue, jobs: metrics.totalJobs, label: "All-Time Volume" };
+    }
+  };
+
+  const activeStats = getTimeframeStats();
 
   // Initial Loading Spinner
   if (authChecking) {
@@ -404,12 +444,11 @@ export default function AdminDashboardContent() {
             <p className="text-xs text-slate-400 font-medium mt-1">
               {authView === 'register_initial' && 'Initial setup: Register the one and only master administrator account.'}
               {authView === 'login' && 'Log in with your verified email and password. Session persists securely.'}
-              {authView === 'forgot_password' && 'Enter your registered admin email to receive a secure password reset link.'}
+              {authView === 'forgot_password' && 'Enter your registered admin email to receive a password reset link.'}
               {authView === 'set_new_password' && 'Enter your new secure password below.'}
             </p>
           </div>
 
-          {/* Feedback Alerts */}
           {authError && (
             <div className="p-3.5 bg-red-500/10 border border-red-500/20 rounded-2xl text-xs text-red-400 font-bold flex items-center space-x-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
@@ -424,7 +463,6 @@ export default function AdminDashboardContent() {
             </div>
           )}
 
-          {/* A. Register Initial Admin Form (Only when 0 admins exist) */}
           {authView === 'register_initial' && (
             <form onSubmit={handleRegisterInitial} className="space-y-4">
               <div>
@@ -438,7 +476,7 @@ export default function AdminDashboardContent() {
                     required
                     value={emailInput}
                     onChange={(e) => setEmailInput(e.target.value)}
-                    placeholder="admin@yourdomain.com"
+                    placeholder="admin@printbolt.store"
                     className="w-full bg-slate-950 border border-slate-800 text-xs text-white pl-10 pr-4 py-3 rounded-2xl focus:outline-none focus:border-blue-500 transition"
                   />
                 </div>
@@ -481,7 +519,7 @@ export default function AdminDashboardContent() {
               </div>
 
               <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-2xl text-[11px] text-blue-300">
-                🔒 <strong>Singleton Protection</strong>: Once this admin is created, all future registrations will be permanently locked.
+                🔒 <strong>Singleton Protection</strong>: Once created, no other admin account can be registered.
               </div>
 
               <button
@@ -498,7 +536,6 @@ export default function AdminDashboardContent() {
             </form>
           )}
 
-          {/* B. Admin Login Form */}
           {authView === 'login' && (
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
@@ -569,7 +606,6 @@ export default function AdminDashboardContent() {
             </form>
           )}
 
-          {/* C. Forgot Password Form */}
           {authView === 'forgot_password' && (
             <form onSubmit={handleForgotPassword} className="space-y-4">
               <div>
@@ -616,7 +652,6 @@ export default function AdminDashboardContent() {
             </form>
           )}
 
-          {/* D. Set New Password Form */}
           {authView === 'set_new_password' && (
             <form onSubmit={handleSetNewPassword} className="space-y-4">
               <div>
@@ -674,7 +709,7 @@ export default function AdminDashboardContent() {
   }
 
   // ==========================================
-  // 2. MAIN SUPER-ADMIN DASHBOARD
+  // 2. MAIN SUPER-ADMIN MANAGEMENT DASHBOARD
   // ==========================================
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 selection:bg-blue-600 selection:text-white pb-24">
@@ -685,7 +720,7 @@ export default function AdminDashboardContent() {
             <img src="/logo.png" alt="PrintBolt" className="w-8 h-8 rounded-lg object-contain" />
             <div>
               <span className="font-black text-lg tracking-tight text-white block leading-none">PrintBolt</span>
-              <span className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">Platform Super-Admin</span>
+              <span className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">Platform Operations</span>
             </div>
           </div>
 
@@ -724,9 +759,52 @@ export default function AdminDashboardContent() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-8">
-        {/* Metric Cards Row */}
+        {/* Timeframe Selector Pill Bar */}
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-slate-900/60 p-2.5 rounded-2xl border border-slate-800">
+          <div className="flex items-center space-x-2 text-xs font-extrabold text-slate-300 px-2">
+            <Calendar className="w-4 h-4 text-blue-400" />
+            <span>Activity Timeframe:</span>
+          </div>
+
+          <div className="flex items-center space-x-1.5 w-full sm:w-auto bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <button
+              onClick={() => setTimeframe('today')}
+              className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+                timeframe === 'today' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Today
+            </button>
+            <button
+              onClick={() => setTimeframe('weekly')}
+              className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+                timeframe === 'weekly' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Weekly (7d)
+            </button>
+            <button
+              onClick={() => setTimeframe('monthly')}
+              className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+                timeframe === 'monthly' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Monthly (30d)
+            </button>
+            <button
+              onClick={() => setTimeframe('all')}
+              className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+                timeframe === 'all' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              All-Time
+            </button>
+          </div>
+        </div>
+
+        {/* Dynamic Metric Cards Row */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          {/* Card 1: Partner Shops */}
+          {/* Card 1: Partner Shops & Live Heartbeats */}
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm">
             <div className="flex justify-between items-start mb-3">
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Partner Shops</span>
@@ -737,18 +815,53 @@ export default function AdminDashboardContent() {
             <div className="text-2xl sm:text-3xl font-black text-white tracking-tight">
               {metrics?.totalShops || 0}
             </div>
-            <div className="text-xs font-semibold text-emerald-400 mt-1 flex items-center space-x-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              <span>{metrics?.activeShopsCount || 0} active now</span>
+            <div className="text-xs font-semibold text-emerald-400 mt-1 flex items-center space-x-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+              <span>{metrics?.onlineShopsCount || 0} online now</span>
+              {metrics?.pausedShopsCount ? (
+                <span className="text-amber-400 font-bold ml-1">({metrics.pausedShopsCount} paused)</span>
+              ) : null}
             </div>
           </div>
 
-          {/* Card 2: Total Prints */}
+          {/* Card 2: Volume in Timeframe */}
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm">
             <div className="flex justify-between items-start mb-3">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Volume</span>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{activeStats.label}</span>
               <div className="p-2.5 bg-purple-500/10 text-purple-400 rounded-2xl">
                 <Printer className="w-5 h-5" />
+              </div>
+            </div>
+            <div className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+              {activeStats.pages.toLocaleString()} <span className="text-sm text-slate-500 font-semibold">pgs</span>
+            </div>
+            <div className="text-xs text-slate-400 mt-1">
+              Across <span className="text-white font-bold">{activeStats.jobs}</span> print orders
+            </div>
+          </div>
+
+          {/* Card 3: Revenue in Timeframe */}
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm">
+            <div className="flex justify-between items-start mb-3">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Revenue in Timeframe</span>
+              <div className="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-2xl">
+                <IndianRupee className="w-5 h-5" />
+              </div>
+            </div>
+            <div className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+              ₹{activeStats.revenue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div className="text-xs text-slate-400 mt-1">
+              All-Time: <span className="text-white font-bold">₹{metrics?.totalRevenue || 0}</span>
+            </div>
+          </div>
+
+          {/* Card 4: All-Time Total Pages */}
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm">
+            <div className="flex justify-between items-start mb-3">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">All-Time Output</span>
+              <div className="p-2.5 bg-amber-500/10 text-amber-400 rounded-2xl">
+                <TrendingUp className="w-5 h-5" />
               </div>
             </div>
             <div className="text-2xl sm:text-3xl font-black text-white tracking-tight">
@@ -756,38 +869,6 @@ export default function AdminDashboardContent() {
             </div>
             <div className="text-xs text-slate-400 mt-1">
               <span className="text-slate-300 font-bold">{metrics?.totalBwPages || 0}</span> B&W • <span className="text-purple-400 font-bold">{metrics?.totalColorPages || 0}</span> Color
-            </div>
-          </div>
-
-          {/* Card 3: Total Gross Revenue */}
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm">
-            <div className="flex justify-between items-start mb-3">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Revenue</span>
-              <div className="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-2xl">
-                <IndianRupee className="w-5 h-5" />
-              </div>
-            </div>
-            <div className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              ₹{(metrics?.totalRevenue || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </div>
-            <div className="text-xs text-slate-400 mt-1">
-              From <span className="text-white font-bold">{metrics?.totalJobs || 0}</span> completed jobs
-            </div>
-          </div>
-
-          {/* Card 4: Today's Activity */}
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm">
-            <div className="flex justify-between items-start mb-3">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Today's Activity</span>
-              <div className="p-2.5 bg-amber-500/10 text-amber-400 rounded-2xl">
-                <TrendingUp className="w-5 h-5" />
-              </div>
-            </div>
-            <div className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              {metrics?.todayPages || 0} <span className="text-sm text-slate-500 font-semibold">pgs</span>
-            </div>
-            <div className="text-xs text-amber-400 font-bold mt-1">
-              ₹{(metrics?.todayRevenue || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} earned today
             </div>
           </div>
         </div>
@@ -800,7 +881,7 @@ export default function AdminDashboardContent() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by shop name, ID, owner, email, phone..."
+              placeholder="Search by shop name, ID, owner email, phone..."
               className="w-full bg-slate-950 border border-slate-800 text-xs text-white pl-10 pr-4 py-2.5 rounded-2xl focus:outline-none focus:border-blue-500 transition placeholder:text-slate-600"
             />
           </div>
@@ -808,7 +889,7 @@ export default function AdminDashboardContent() {
           <div className="flex items-center space-x-2 w-full sm:w-auto">
             <button
               onClick={() => setStatusFilter('all')}
-              className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-bold transition ${
+              className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold transition ${
                 statusFilter === 'all' 
                   ? 'bg-blue-600 text-white' 
                   : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
@@ -817,29 +898,40 @@ export default function AdminDashboardContent() {
               All ({shops.length})
             </button>
             <button
-              onClick={() => setStatusFilter('active')}
-              className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-bold transition ${
-                statusFilter === 'active' 
+              onClick={() => setStatusFilter('online')}
+              className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1 ${
+                statusFilter === 'online' 
                   ? 'bg-emerald-600 text-white' 
                   : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
               }`}
             >
-              Active
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              <span>Online</span>
             </button>
             <button
-              onClick={() => setStatusFilter('inactive')}
-              className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-bold transition ${
-                statusFilter === 'inactive' 
-                  ? 'bg-red-600 text-white' 
+              onClick={() => setStatusFilter('offline')}
+              className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold transition ${
+                statusFilter === 'offline' 
+                  ? 'bg-slate-700 text-white' 
                   : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
               }`}
             >
-              Inactive
+              Offline
+            </button>
+            <button
+              onClick={() => setStatusFilter('paused')}
+              className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold transition ${
+                statusFilter === 'paused' 
+                  ? 'bg-amber-600 text-white' 
+                  : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+              }`}
+            >
+              Paused
             </button>
           </div>
         </div>
 
-        {/* Shops Directory Table */}
+        {/* Partner Shops Directory Table */}
         <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
           <div className="px-6 py-4 border-b border-slate-800 flex justify-between items-center">
             <h3 className="font-extrabold text-sm text-white tracking-wide uppercase">Partner Shops Directory</h3>
@@ -849,7 +941,7 @@ export default function AdminDashboardContent() {
           {loading ? (
             <div className="p-16 text-center">
               <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-              <span className="text-xs text-slate-400 font-bold">Loading partner shops metrics...</span>
+              <span className="text-xs text-slate-400 font-bold">Loading partner shops activity...</span>
             </div>
           ) : filteredShops.length === 0 ? (
             <div className="p-16 text-center text-slate-500">
@@ -863,129 +955,162 @@ export default function AdminDashboardContent() {
                 <thead className="bg-slate-950 text-slate-400 font-bold uppercase tracking-wider border-b border-slate-800 text-[10px]">
                   <tr>
                     <th className="py-3.5 px-6">Shop Details</th>
-                    <th className="py-3.5 px-4">Status</th>
-                    <th className="py-3.5 px-4 text-right">Total Prints</th>
-                    <th className="py-3.5 px-4 text-right">Total Revenue</th>
-                    <th className="py-3.5 px-4 text-right">Today</th>
-                    <th className="py-3.5 px-4">Pricing Rules</th>
-                    <th className="py-3.5 px-6 text-right">Actions</th>
+                    <th className="py-3.5 px-4">Live Status</th>
+                    <th className="py-3.5 px-4 text-right">
+                      {timeframe === 'today' ? "Today's Volume" : timeframe === 'weekly' ? "Weekly Volume" : timeframe === 'monthly' ? "Monthly Volume" : "Total Volume"}
+                    </th>
+                    <th className="py-3.5 px-4 text-right">Revenue ({timeframe})</th>
+                    <th className="py-3.5 px-4">Shop Rates (View Only)</th>
+                    <th className="py-3.5 px-6 text-right">Service Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 font-medium">
-                  {filteredShops.map((shop) => (
-                    <tr 
-                      key={shop.user_id} 
-                      onClick={() => handleSelectShop(shop)}
-                      className="hover:bg-slate-800/40 transition cursor-pointer group"
-                    >
-                      {/* Shop Name & ID */}
-                      <td className="py-4 px-6">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 rounded-2xl bg-blue-500/10 text-blue-400 flex items-center justify-center font-black text-sm border border-blue-500/20 group-hover:scale-105 transition">
-                            {shop.shop_name.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <div className="font-extrabold text-white text-sm group-hover:text-blue-400 transition flex items-center space-x-1.5">
-                              <span>{shop.shop_name}</span>
-                              <ChevronRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-blue-400 transition" />
+                  {filteredShops.map((shop) => {
+                    const shopPages = timeframe === 'today' ? shop.today_pages : timeframe === 'weekly' ? shop.weekly_pages : timeframe === 'monthly' ? shop.monthly_pages : shop.total_pages;
+                    const shopRev = timeframe === 'today' ? shop.today_revenue : timeframe === 'weekly' ? shop.weekly_revenue : timeframe === 'monthly' ? shop.monthly_revenue : shop.total_revenue;
+                    const shopOrders = timeframe === 'today' ? shop.today_jobs : timeframe === 'weekly' ? shop.weekly_jobs : timeframe === 'monthly' ? shop.monthly_jobs : shop.total_jobs;
+
+                    return (
+                      <tr 
+                        key={shop.user_id} 
+                        onClick={() => handleSelectShop(shop)}
+                        className="hover:bg-slate-800/40 transition cursor-pointer group"
+                      >
+                        {/* Shop Details */}
+                        <td className="py-4 px-6">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 rounded-2xl bg-blue-500/10 text-blue-400 flex items-center justify-center font-black text-sm border border-blue-500/20 group-hover:scale-105 transition">
+                              {shop.shop_name.charAt(0).toUpperCase()}
                             </div>
-                            <div className="text-[11px] text-slate-400 flex items-center space-x-2 mt-0.5">
-                              <span>{shop.owner_name || shop.email || 'No contact'}</span>
-                              <span className="text-slate-600">•</span>
-                              <span className="font-mono text-[10px] text-slate-500">ID: {shop.user_id.substring(0, 8)}...</span>
+                            <div>
+                              <div className="font-extrabold text-white text-sm group-hover:text-blue-400 transition flex items-center space-x-1.5">
+                                <span>{shop.shop_name}</span>
+                                <ChevronRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-blue-400 transition" />
+                              </div>
+                              <div className="text-[11px] text-slate-400 flex items-center space-x-2 mt-0.5">
+                                <span>{shop.email || shop.owner_name || 'No email registered'}</span>
+                                <span className="text-slate-600">•</span>
+                                <span className="font-mono text-[10px] text-slate-500">ID: {shop.user_id.substring(0, 8)}...</span>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* Status */}
-                      <td className="py-4 px-4">
-                        {shop.is_active ? (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                            Active
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-red-500/10 text-red-400 border border-red-500/20">
-                            Suspended
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Total Volume */}
-                      <td className="py-4 px-4 text-right">
-                        <div className="font-black text-white text-sm">
-                          {shop.total_pages} <span className="text-[10px] font-semibold text-slate-400">pgs</span>
-                        </div>
-                        <div className="text-[10px] text-slate-500">
-                          {shop.total_bw_pages} B&W • {shop.total_color_pages} Color
-                        </div>
-                      </td>
-
-                      {/* Total Revenue */}
-                      <td className="py-4 px-4 text-right">
-                        <div className="font-black text-emerald-400 text-sm">
-                          ₹{shop.total_revenue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </div>
-                        <div className="text-[10px] text-slate-500">
-                          {shop.total_jobs} orders
-                        </div>
-                      </td>
-
-                      {/* Today */}
-                      <td className="py-4 px-4 text-right">
-                        <div className="font-extrabold text-amber-400">
-                          {shop.today_pages} pgs
-                        </div>
-                        <div className="text-[10px] text-slate-500">
-                          ₹{shop.today_revenue}
-                        </div>
-                      </td>
-
-                      {/* Pricing Rules */}
-                      <td className="py-4 px-4">
-                        <div className="text-[11px] text-slate-300 font-semibold">
-                          B&W: <span className="text-white font-bold">₹{shop.bw_price}</span> • Color: <span className="text-purple-300 font-bold">₹{shop.color_price}</span>
-                        </div>
-                        <div className="text-[10px] text-slate-500">
-                          Duplex: ₹{shop.duplex_price}
-                        </div>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end space-x-1.5">
-                          <button
-                            onClick={() => handleOpenEdit(shop)}
-                            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition"
-                            title="Edit Pricing & Settings"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-
-                          <button
-                            onClick={(e) => handleCopy(`https://printbolt.store/p?shopId=${shop.user_id}`, shop.user_id, e)}
-                            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition"
-                            title="Copy Customer Portal URL"
-                          >
-                            {copiedId === shop.user_id ? (
-                              <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        {/* Real-time Status */}
+                        <td className="py-4 px-4">
+                          <div className="flex flex-col space-y-1">
+                            {/* Service Status */}
+                            {shop.is_paused ? (
+                              <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/10 text-amber-400 border border-amber-500/20 w-max">
+                                <PauseCircle className="w-3 h-3" />
+                                <span>Service Paused</span>
+                              </span>
                             ) : (
-                              <Copy className="w-3.5 h-3.5" />
+                              <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 w-max">
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>Service Active</span>
+                              </span>
                             )}
-                          </button>
 
-                          <Link
-                            href={`/p?shopId=${shop.user_id}`}
-                            target="_blank"
-                            className="p-2 text-slate-400 hover:text-blue-400 hover:bg-slate-800 rounded-xl transition"
-                            title="Open Customer Counter Portal"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </Link>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                            {/* Agent Online / Offline Indicator */}
+                            <span className="text-[10px] font-bold flex items-center space-x-1 text-slate-400">
+                              {shop.is_online ? (
+                                <>
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                  <span className="text-emerald-400 font-bold">PC App Online</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
+                                  <span>PC App Offline</span>
+                                </>
+                              )}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Prints in Timeframe */}
+                        <td className="py-4 px-4 text-right">
+                          <div className="font-black text-white text-sm">
+                            {shopPages} <span className="text-[10px] font-semibold text-slate-400">pgs</span>
+                          </div>
+                          <div className="text-[10px] text-slate-500">
+                            {shopOrders} orders
+                          </div>
+                        </td>
+
+                        {/* Revenue in Timeframe */}
+                        <td className="py-4 px-4 text-right">
+                          <div className="font-black text-emerald-400 text-sm">
+                            ₹{shopRev.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </div>
+                          <div className="text-[10px] text-slate-500">
+                            All-Time: ₹{shop.total_revenue}
+                          </div>
+                        </td>
+
+                        {/* Rates Set by Shopkeeper (View Only) */}
+                        <td className="py-4 px-4">
+                          <div className="text-[11px] text-slate-300 font-semibold">
+                            B&W: <span className="text-white font-bold">₹{shop.bw_price}</span> • Color: <span className="text-purple-300 font-bold">₹{shop.color_price}</span>
+                          </div>
+                          <div className="text-[10px] text-slate-500">
+                            Duplex: ₹{shop.duplex_price}
+                          </div>
+                        </td>
+
+                        {/* Service Actions (Pause / Resume / Links) */}
+                        <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end space-x-1.5">
+                            {/* Pause / Resume Button */}
+                            <button
+                              onClick={(e) => handleTogglePause(shop, e)}
+                              disabled={actionLoading}
+                              className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1 ${
+                                shop.is_paused 
+                                  ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600/30' 
+                                  : 'bg-amber-600/20 text-amber-400 border border-amber-500/30 hover:bg-amber-600/30'
+                              }`}
+                              title={shop.is_paused ? "Resume Customer Order Intake" : "Pause Customer Order Intake"}
+                            >
+                              {shop.is_paused ? (
+                                <>
+                                  <PlayCircle className="w-3.5 h-3.5" />
+                                  <span>Resume</span>
+                                </>
+                              ) : (
+                                <>
+                                  <PauseCircle className="w-3.5 h-3.5" />
+                                  <span>Pause</span>
+                                </>
+                              )}
+                            </button>
+
+                            <button
+                              onClick={(e) => handleCopy(`https://printbolt.store/p?shopId=${shop.user_id}`, shop.user_id, e)}
+                              className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition"
+                              title="Copy Customer Counter Link"
+                            >
+                              {copiedId === shop.user_id ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+
+                            <Link
+                              href={`/p?shopId=${shop.user_id}`}
+                              target="_blank"
+                              className="p-2 text-slate-400 hover:text-blue-400 hover:bg-slate-800 rounded-xl transition"
+                              title="Open Customer Counter Portal"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </Link>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -994,7 +1119,7 @@ export default function AdminDashboardContent() {
       </main>
 
       {/* ========================================== */}
-      {/* 3. Shop Deep-Dive Audit Drawer / Modal */}
+      {/* 3. Shop Deep-Dive Audit & Service Drawer */}
       {/* ========================================== */}
       {selectedShop && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex justify-end">
@@ -1002,19 +1127,45 @@ export default function AdminDashboardContent() {
             {/* Drawer Header */}
             <div className="p-6 border-b border-slate-800 flex justify-between items-start">
               <div>
-                <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest block mb-1">Shop Audit & Performance</span>
+                <div className="flex items-center space-x-2 mb-1">
+                  <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest block">Shop Overview & Activity</span>
+                  {selectedShop.is_online ? (
+                    <span className="text-[10px] font-extrabold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 flex items-center space-x-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                      <span>Online</span>
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-extrabold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">
+                      Offline
+                    </span>
+                  )}
+                </div>
                 <h3 className="text-xl font-black text-white tracking-tight">{selectedShop.shop_name}</h3>
                 <p className="text-xs text-slate-400 mt-1 font-mono">ID: {selectedShop.user_id}</p>
               </div>
 
               <div className="flex items-center space-x-2">
                 <button
-                  onClick={() => handleOpenEdit(selectedShop)}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-bold rounded-xl text-white transition flex items-center space-x-1.5"
+                  onClick={() => handleTogglePause(selectedShop)}
+                  disabled={actionLoading}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 ${
+                    selectedShop.is_paused
+                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                      : 'bg-amber-600 hover:bg-amber-500 text-white'
+                  }`}
                 >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>Edit</span>
+                  {selectedShop.is_paused ? <PlayCircle className="w-3.5 h-3.5" /> : <PauseCircle className="w-3.5 h-3.5" />}
+                  <span>{selectedShop.is_paused ? 'Resume Service' : 'Pause Service'}</span>
                 </button>
+
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="p-2 text-slate-400 hover:text-red-400 rounded-xl hover:bg-slate-800 transition"
+                  title="Remove Shop from Platform"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+
                 <button
                   onClick={() => setSelectedShop(null)}
                   className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition"
@@ -1026,32 +1177,54 @@ export default function AdminDashboardContent() {
 
             {/* Drawer Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-              {/* Stats Overview */}
+              {/* Stats Overview Grid */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">Total Volume</span>
-                  <div className="text-xl font-black text-white mt-1">{selectedShop.total_pages} <span className="text-xs font-semibold text-slate-500">pgs</span></div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">{selectedShop.total_jobs} jobs</div>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase">Monthly Volume</span>
+                  <div className="text-xl font-black text-white mt-1">{selectedShop.monthly_pages} <span className="text-xs font-semibold text-slate-500">pgs</span></div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">{selectedShop.monthly_jobs} jobs (30d)</div>
                 </div>
 
                 <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">Total Revenue</span>
-                  <div className="text-xl font-black text-emerald-400 mt-1">₹{selectedShop.total_revenue}</div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">₹{selectedShop.today_revenue} today</div>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase">Monthly Revenue</span>
+                  <div className="text-xl font-black text-emerald-400 mt-1">₹{selectedShop.monthly_revenue}</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">All-Time: ₹{selectedShop.total_revenue}</div>
                 </div>
 
                 <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">Status</span>
-                  <div className="text-sm font-black mt-2">
-                    {selectedShop.is_active ? (
+                  <span className="text-[10px] font-bold text-slate-500 uppercase">Service Status</span>
+                  <div className="text-xs font-black mt-2">
+                    {selectedShop.is_paused ? (
+                      <span className="text-amber-400 flex items-center space-x-1">
+                        <PauseCircle className="w-3.5 h-3.5" /> <span>Paused</span>
+                      </span>
+                    ) : (
                       <span className="text-emerald-400 flex items-center space-x-1">
                         <CheckCircle2 className="w-3.5 h-3.5" /> <span>Active</span>
                       </span>
-                    ) : (
-                      <span className="text-red-400 flex items-center space-x-1">
-                        <XCircle className="w-3.5 h-3.5" /> <span>Suspended</span>
-                      </span>
                     )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Shopkeeper Rates (View Only) */}
+              <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-slate-300 uppercase tracking-wide">Shopkeeper Printing Rates</span>
+                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Set by Shopkeeper</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 pt-1 text-center">
+                  <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+                    <span className="text-[9px] text-slate-400 font-bold uppercase block">B&W Rate</span>
+                    <span className="text-sm font-black text-white">₹{selectedShop.bw_price} / pg</span>
+                  </div>
+                  <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+                    <span className="text-[9px] text-slate-400 font-bold uppercase block">Color Rate</span>
+                    <span className="text-sm font-black text-purple-400">₹{selectedShop.color_price} / pg</span>
+                  </div>
+                  <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+                    <span className="text-[9px] text-slate-400 font-bold uppercase block">Duplex Extra</span>
+                    <span className="text-sm font-black text-slate-300">₹{selectedShop.duplex_price} / pg</span>
                   </div>
                 </div>
               </div>
@@ -1085,28 +1258,36 @@ export default function AdminDashboardContent() {
                 </div>
               </div>
 
-              {/* Recent Audit Logs Table */}
+              {/* Recent Audit Logs & Download Activity */}
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
-                  <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wide">Recent Print Audit Logs</h4>
-                  <span className="text-[10px] text-slate-500">{shopAudits.length} recorded prints</span>
+                  <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wide">Print Activity Log</h4>
+                  {shopAudits.length > 0 && (
+                    <button
+                      onClick={() => exportShopAuditsToCSV(selectedShop, shopAudits)}
+                      className="text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center space-x-1 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 transition"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span>Download Shop Activity (.csv)</span>
+                    </button>
+                  )}
                 </div>
 
                 {loadingAudits ? (
                   <div className="p-8 text-center bg-slate-950 rounded-2xl border border-slate-800">
                     <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                    <span className="text-xs text-slate-500 font-bold">Loading audit logs...</span>
+                    <span className="text-xs text-slate-500 font-bold">Loading print activity...</span>
                   </div>
                 ) : shopAudits.length === 0 ? (
                   <div className="p-8 text-center bg-slate-950 rounded-2xl border border-slate-800 text-slate-500 text-xs">
-                    No print jobs recorded for this shop yet.
+                    No print activity recorded for this shop yet.
                   </div>
                 ) : (
                   <div className="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden max-h-80 overflow-y-auto custom-scrollbar">
                     <table className="w-full text-left text-[11px]">
                       <thead className="bg-slate-900 text-slate-400 font-bold uppercase tracking-wider text-[9px] sticky top-0">
                         <tr>
-                          <th className="py-2.5 px-3">Time</th>
+                          <th className="py-2.5 px-3">Date & Time</th>
                           <th className="py-2.5 px-3">File Name</th>
                           <th className="py-2.5 px-2">Specs</th>
                           <th className="py-2.5 px-3 text-right">Amount</th>
@@ -1117,6 +1298,7 @@ export default function AdminDashboardContent() {
                         {shopAudits.map((a) => (
                           <tr key={a.id} className="hover:bg-slate-900/50">
                             <td className="py-2.5 px-3 text-slate-400 font-mono text-[10px]">
+                              {new Date(a.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}{' '}
                               {new Date(a.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </td>
                             <td className="py-2.5 px-3 font-semibold text-white truncate max-w-[140px]">
@@ -1146,122 +1328,46 @@ export default function AdminDashboardContent() {
       )}
 
       {/* ========================================== */}
-      {/* 4. Edit Pricing & Settings Modal */}
+      {/* 4. Delete Shop Confirmation Modal */}
       {/* ========================================== */}
-      {showEditModal && selectedShop && (
+      {showDeleteConfirm && selectedShop && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-6">
-            <div className="flex justify-between items-center">
-              <div>
-                <h3 className="text-lg font-black text-white">Edit Shop Pricing</h3>
-                <p className="text-xs text-slate-400 mt-0.5">{selectedShop.shop_name}</p>
-              </div>
-              <button
-                onClick={() => setShowEditModal(false)}
-                className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
+          <div className="max-w-md w-full bg-slate-900 border border-red-500/30 rounded-3xl p-6 shadow-2xl space-y-5">
+            <div className="w-12 h-12 bg-red-500/10 text-red-400 rounded-2xl flex items-center justify-center mx-auto border border-red-500/20">
+              <AlertTriangle className="w-6 h-6" />
             </div>
 
-            <form onSubmit={handleSaveSettings} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wide mb-1.5">
-                  Shop Name
-                </label>
-                <input
-                  type="text"
-                  value={editForm.shop_name}
-                  onChange={(e) => setEditForm({ ...editForm, shop_name: e.target.value })}
-                  required
-                  className="w-full bg-slate-950 border border-slate-800 text-xs text-white px-3.5 py-2.5 rounded-xl focus:outline-none focus:border-blue-500 transition"
-                />
-              </div>
+            <div className="text-center">
+              <h3 className="text-lg font-black text-white">Remove Partner Shop?</h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Are you sure you want to remove <strong className="text-white">{selectedShop.shop_name}</strong> from the platform?
+              </p>
+              <p className="text-[11px] text-red-400 mt-2">
+                This will deactivate the counter QR link and remove the shop registration.
+              </p>
+            </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wide mb-1.5">
-                    B&W Rate (₹/pg)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0.1"
-                    value={editForm.bw_price}
-                    onChange={(e) => setEditForm({ ...editForm, bw_price: parseFloat(e.target.value) || 0 })}
-                    required
-                    className="w-full bg-slate-950 border border-slate-800 text-xs text-white px-3.5 py-2.5 rounded-xl focus:outline-none focus:border-blue-500 transition"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wide mb-1.5">
-                    Color Rate (₹/pg)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0.1"
-                    value={editForm.color_price}
-                    onChange={(e) => setEditForm({ ...editForm, color_price: parseFloat(e.target.value) || 0 })}
-                    required
-                    className="w-full bg-slate-950 border border-slate-800 text-xs text-white px-3.5 py-2.5 rounded-xl focus:outline-none focus:border-blue-500 transition"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wide mb-1.5">
-                  Duplex Additional Rate (₹/pg)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  value={editForm.duplex_price}
-                  onChange={(e) => setEditForm({ ...editForm, duplex_price: parseFloat(e.target.value) || 0 })}
-                  required
-                  className="w-full bg-slate-950 border border-slate-800 text-xs text-white px-3.5 py-2.5 rounded-xl focus:outline-none focus:border-blue-500 transition"
-                />
-              </div>
-
-              <div className="flex items-center space-x-3 pt-2">
-                <input
-                  type="checkbox"
-                  id="shop_active_toggle"
-                  checked={editForm.is_active}
-                  onChange={(e) => setEditForm({ ...editForm, is_active: e.target.checked })}
-                  className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 bg-slate-950 border-slate-800"
-                />
-                <label htmlFor="shop_active_toggle" className="text-xs font-bold text-slate-300">
-                  Shop is Active & Receiving Orders
-                </label>
-              </div>
-
-              <div className="pt-4 flex space-x-3">
-                <button
-                  type="button"
-                  onClick={() => setShowEditModal(false)}
-                  className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingEdit}
-                  className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl text-xs transition flex justify-center items-center space-x-1.5 shadow-lg shadow-blue-600/30"
-                >
-                  {savingEdit ? (
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  ) : (
-                    <>
-                      <Save className="w-3.5 h-3.5" />
-                      <span>Save Changes</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
+            <div className="flex space-x-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteShop(selectedShop)}
+                disabled={actionLoading}
+                className="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-2.5 rounded-xl text-xs transition flex justify-center items-center shadow-lg shadow-red-600/30"
+              >
+                {actionLoading ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  'Confirm Remove'
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

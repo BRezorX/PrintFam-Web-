@@ -20,29 +20,63 @@ export interface ShopSummary {
   discount_rules?: any;
   qr_data?: string;
   created_at?: string;
-  is_active?: boolean;
+  is_active: boolean;
+  is_paused: boolean;
+  last_seen_at?: string;
+  is_online: boolean;
+  
+  // All-Time
   total_jobs: number;
   total_pages: number;
   total_bw_pages: number;
   total_color_pages: number;
   total_revenue: number;
+  
+  // Today
   today_jobs: number;
   today_pages: number;
   today_revenue: number;
+
+  // Weekly (Last 7 Days)
+  weekly_jobs: number;
+  weekly_pages: number;
+  weekly_revenue: number;
+
+  // Monthly (Last 30 Days)
+  monthly_jobs: number;
+  monthly_pages: number;
+  monthly_revenue: number;
+
   last_activity?: string;
 }
 
 export interface PlatformMetrics {
   totalShops: number;
+  onlineShopsCount: number;
   activeShopsCount: number;
+  pausedShopsCount: number;
+  
+  // All-Time
   totalJobs: number;
   totalPages: number;
   totalBwPages: number;
   totalColorPages: number;
   totalRevenue: number;
+
+  // Today
   todayJobs: number;
   todayPages: number;
   todayRevenue: number;
+
+  // Weekly
+  weeklyJobs: number;
+  weeklyPages: number;
+  weeklyRevenue: number;
+
+  // Monthly
+  monthlyJobs: number;
+  monthlyPages: number;
+  monthlyRevenue: number;
 }
 
 export interface PrintAuditEntry {
@@ -166,7 +200,6 @@ export async function loginAdmin(email: string, password: string): Promise<{ suc
   }
 
   try {
-    // 1. Verify that this email is the registered admin
     const status = await checkAdminStatus();
     if (!status.hasAdmin) {
       return { success: false, error: "No admin account is registered yet. Please create the initial admin account." };
@@ -176,7 +209,6 @@ export async function loginAdmin(email: string, password: string): Promise<{ suc
       return { success: false, error: "Access denied. Only the registered platform admin can log in." };
     }
 
-    // 2. Authenticate with Supabase Auth
     const { data, error } = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
       password
@@ -284,14 +316,15 @@ export async function logoutAdmin(): Promise<void> {
 }
 
 // ==========================================
-// DATA & METRICS
+// DATA & ACTIVITY METRICS
 // ==========================================
 
 /**
- * Fetches all shops with their aggregated metrics and print volume.
+ * Fetches all shops with real-time status and weekly/monthly activity.
  */
 export async function getAllShopsWithMetrics(): Promise<{ shops: ShopSummary[]; metrics: PlatformMetrics }> {
   if (isDemoMode || !supabase) {
+    const now = Date.now();
     const mockShops: ShopSummary[] = [
       {
         user_id: "aae78ccf-4e27-4b11-b6fb-d4c84c919ad7",
@@ -303,6 +336,9 @@ export async function getAllShopsWithMetrics(): Promise<{ shops: ShopSummary[]; 
         color_price: 10.0,
         duplex_price: 1.5,
         is_active: true,
+        is_paused: false,
+        last_seen_at: new Date(now - 2 * 60000).toISOString(),
+        is_online: true,
         created_at: "2026-08-01T10:00:00Z",
         total_jobs: 142,
         total_pages: 580,
@@ -312,7 +348,13 @@ export async function getAllShopsWithMetrics(): Promise<{ shops: ShopSummary[]; 
         today_jobs: 14,
         today_pages: 62,
         today_revenue: 245,
-        last_activity: new Date().toISOString()
+        weekly_jobs: 84,
+        weekly_pages: 360,
+        weekly_revenue: 1350,
+        monthly_jobs: 142,
+        monthly_pages: 580,
+        monthly_revenue: 2120,
+        last_activity: new Date(now - 2 * 60000).toISOString()
       },
       {
         user_id: "b7e21a44-8833-4f91-99cc-11aa22bb33cc",
@@ -324,6 +366,9 @@ export async function getAllShopsWithMetrics(): Promise<{ shops: ShopSummary[]; 
         color_price: 8.0,
         duplex_price: 1.0,
         is_active: true,
+        is_paused: false,
+        last_seen_at: new Date(now - 45 * 60000).toISOString(),
+        is_online: false,
         created_at: "2026-08-15T12:00:00Z",
         total_jobs: 89,
         total_pages: 410,
@@ -333,13 +378,21 @@ export async function getAllShopsWithMetrics(): Promise<{ shops: ShopSummary[]; 
         today_jobs: 8,
         today_pages: 35,
         today_revenue: 95,
-        last_activity: new Date(Date.now() - 3600000).toISOString()
+        weekly_jobs: 48,
+        weekly_pages: 210,
+        weekly_revenue: 590,
+        monthly_jobs: 89,
+        monthly_pages: 410,
+        monthly_revenue: 1105,
+        last_activity: new Date(now - 45 * 60000).toISOString()
       }
     ];
 
     const metrics: PlatformMetrics = {
       totalShops: mockShops.length,
-      activeShopsCount: mockShops.filter(s => s.is_active).length,
+      onlineShopsCount: mockShops.filter(s => s.is_online).length,
+      activeShopsCount: mockShops.filter(s => s.is_active && !s.is_paused).length,
+      pausedShopsCount: mockShops.filter(s => s.is_paused).length,
       totalJobs: mockShops.reduce((a, b) => a + b.total_jobs, 0),
       totalPages: mockShops.reduce((a, b) => a + b.total_pages, 0),
       totalBwPages: mockShops.reduce((a, b) => a + b.total_bw_pages, 0),
@@ -348,68 +401,100 @@ export async function getAllShopsWithMetrics(): Promise<{ shops: ShopSummary[]; 
       todayJobs: mockShops.reduce((a, b) => a + b.today_jobs, 0),
       todayPages: mockShops.reduce((a, b) => a + b.today_pages, 0),
       todayRevenue: mockShops.reduce((a, b) => a + b.today_revenue, 0),
+      weeklyJobs: mockShops.reduce((a, b) => a + b.weekly_jobs, 0),
+      weeklyPages: mockShops.reduce((a, b) => a + b.weekly_pages, 0),
+      weeklyRevenue: mockShops.reduce((a, b) => a + b.weekly_revenue, 0),
+      monthlyJobs: mockShops.reduce((a, b) => a + b.monthly_jobs, 0),
+      monthlyPages: mockShops.reduce((a, b) => a + b.monthly_pages, 0),
+      monthlyRevenue: mockShops.reduce((a, b) => a + b.monthly_revenue, 0),
     };
 
     return { shops: mockShops, metrics };
   }
 
   try {
-    // 1. Try fetching via RPC function with joined auth emails
+    // 1. Fetch shops via RPC or fallback
     let rawShops: any[] = [];
     const { data: rpcShops, error: rpcErr } = await supabase.rpc('get_all_shops_for_admin');
 
     if (!rpcErr && rpcShops && Array.isArray(rpcShops)) {
       rawShops = rpcShops;
     } else {
-      // Fallback: Query shop_settings directly
-      const { data: directShops, error: directErr } = await supabase
-        .from('shop_settings')
-        .select('*');
-
-      if (directErr) {
-        console.warn("adminApi: direct shop_settings select warning", directErr);
-      }
+      const { data: directShops } = await supabase.from('shop_settings').select('*');
       rawShops = directShops || [];
     }
 
-    // 2. Fetch all print audits for volume & revenue calculations
-    const { data: auditsData, error: auditsErr } = await supabase
-      .from('print_audits')
-      .select('*');
-
-    if (auditsErr) {
-      console.warn("adminApi: print_audits fetch warning", auditsErr);
-    }
-
+    // 2. Fetch all print audits
+    const { data: auditsData } = await supabase.from('print_audits').select('*');
     const audits: PrintAuditEntry[] = auditsData || [];
-    const todayDateStr = new Date().toISOString().split('T')[0];
+
+    const now = Date.now();
+    const oneDayAgo = now - 24 * 60 * 60 * 1000;
+    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+    const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+    const tenMinutesAgo = now - 10 * 60 * 1000; // Online heartbeat threshold
 
     const shops: ShopSummary[] = rawShops.map((shop: any) => {
       const shopAudits = audits.filter(a => a.user_id === shop.user_id);
-      const todayAudits = shopAudits.filter(a => (a.created_at || '').startsWith(todayDateStr));
+      
+      // Determine real-time Online/Offline status
+      let lastActivityTime = shop.last_seen_at ? new Date(shop.last_seen_at).getTime() : 0;
+      if (shopAudits[0]?.created_at) {
+        const auditTime = new Date(shopAudits[0].created_at).getTime();
+        if (auditTime > lastActivityTime) lastActivityTime = auditTime;
+      }
+      const isOnline = lastActivityTime >= tenMinutesAgo;
 
       let total_bw_pages = 0;
       let total_color_pages = 0;
       let total_pages = 0;
       let total_revenue = 0;
 
+      let today_jobs = 0;
+      let today_pages = 0;
+      let today_revenue = 0;
+
+      let weekly_jobs = 0;
+      let weekly_pages = 0;
+      let weekly_revenue = 0;
+
+      let monthly_jobs = 0;
+      let monthly_pages = 0;
+      let monthly_revenue = 0;
+
       shopAudits.forEach(a => {
         const count = Math.max(1, a.pages || 1) * Math.max(1, a.copies || 1);
+        const amount = Number(a.amount || 0);
+        const auditTimestamp = new Date(a.created_at).getTime();
+
         total_pages += count;
         if (a.color) {
           total_color_pages += count;
         } else {
           total_bw_pages += count;
         }
-        total_revenue += Number(a.amount || 0);
-      });
+        total_revenue += amount;
 
-      let today_pages = 0;
-      let today_revenue = 0;
-      todayAudits.forEach(a => {
-        const count = Math.max(1, a.pages || 1) * Math.max(1, a.copies || 1);
-        today_pages += count;
-        today_revenue += Number(a.amount || 0);
+        // Today
+        if (auditTimestamp >= oneDayAgo) {
+          today_jobs++;
+          today_pages += count;
+          today_revenue += amount;
+        }
+
+        // Weekly
+        if (auditTimestamp >= sevenDaysAgo) {
+          weekly_jobs++;
+          weekly_pages += count;
+          weekly_revenue += amount;
+        }
+
+        // Monthly
+        if (auditTimestamp >= thirtyDaysAgo) {
+          monthly_jobs++;
+          monthly_pages += count;
+          monthly_revenue += amount;
+        }
       });
 
       return {
@@ -425,21 +510,32 @@ export async function getAllShopsWithMetrics(): Promise<{ shops: ShopSummary[]; 
         qr_data: shop.qr_data || `https://printbolt.store/p?shopId=${shop.user_id}`,
         created_at: shop.created_at,
         is_active: shop.is_active !== false,
+        is_paused: shop.is_paused === true,
+        last_seen_at: lastActivityTime > 0 ? new Date(lastActivityTime).toISOString() : shop.created_at,
+        is_online: isOnline,
         total_jobs: shopAudits.length,
         total_pages,
         total_bw_pages,
         total_color_pages,
         total_revenue,
-        today_jobs: todayAudits.length,
+        today_jobs,
         today_pages,
         today_revenue,
-        last_activity: shopAudits[0]?.created_at || shop.created_at
+        weekly_jobs,
+        weekly_pages,
+        weekly_revenue,
+        monthly_jobs,
+        monthly_pages,
+        monthly_revenue,
+        last_activity: lastActivityTime > 0 ? new Date(lastActivityTime).toISOString() : shop.created_at
       };
     });
 
     const metrics: PlatformMetrics = {
       totalShops: shops.length,
-      activeShopsCount: shops.filter(s => s.is_active).length,
+      onlineShopsCount: shops.filter(s => s.is_online).length,
+      activeShopsCount: shops.filter(s => s.is_active && !s.is_paused).length,
+      pausedShopsCount: shops.filter(s => s.is_paused).length,
       totalJobs: audits.length,
       totalPages: shops.reduce((a, b) => a + b.total_pages, 0),
       totalBwPages: shops.reduce((a, b) => a + b.total_bw_pages, 0),
@@ -448,6 +544,12 @@ export async function getAllShopsWithMetrics(): Promise<{ shops: ShopSummary[]; 
       todayJobs: shops.reduce((a, b) => a + b.today_jobs, 0),
       todayPages: shops.reduce((a, b) => a + b.today_pages, 0),
       todayRevenue: shops.reduce((a, b) => a + b.today_revenue, 0),
+      weeklyJobs: shops.reduce((a, b) => a + b.weekly_jobs, 0),
+      weeklyPages: shops.reduce((a, b) => a + b.weekly_pages, 0),
+      weeklyRevenue: shops.reduce((a, b) => a + b.weekly_revenue, 0),
+      monthlyJobs: shops.reduce((a, b) => a + b.monthly_jobs, 0),
+      monthlyPages: shops.reduce((a, b) => a + b.monthly_pages, 0),
+      monthlyRevenue: shops.reduce((a, b) => a + b.monthly_revenue, 0),
     };
 
     return { shops, metrics };
@@ -457,7 +559,9 @@ export async function getAllShopsWithMetrics(): Promise<{ shops: ShopSummary[]; 
       shops: [],
       metrics: {
         totalShops: 0,
+        onlineShopsCount: 0,
         activeShopsCount: 0,
+        pausedShopsCount: 0,
         totalJobs: 0,
         totalPages: 0,
         totalBwPages: 0,
@@ -466,6 +570,12 @@ export async function getAllShopsWithMetrics(): Promise<{ shops: ShopSummary[]; 
         todayJobs: 0,
         todayPages: 0,
         todayRevenue: 0,
+        weeklyJobs: 0,
+        weeklyPages: 0,
+        weeklyRevenue: 0,
+        monthlyJobs: 0,
+        monthlyPages: 0,
+        monthlyRevenue: 0,
       }
     };
   }
@@ -512,7 +622,7 @@ export async function getShopAuditLogs(shopId: string): Promise<PrintAuditEntry[
       .select('*')
       .eq('user_id', shopId)
       .order('created_at', { ascending: false })
-      .limit(100);
+      .limit(200);
 
     if (error) throw error;
     return data || [];
@@ -523,9 +633,9 @@ export async function getShopAuditLogs(shopId: string): Promise<PrintAuditEntry[
 }
 
 /**
- * Updates shop pricing and configuration.
+ * Toggles a shop's service pause state (Pause / Resume Service).
  */
-export async function updateShopSettings(shopId: string, updates: Partial<ShopSummary>): Promise<boolean> {
+export async function toggleShopPause(shopId: string, isPaused: boolean): Promise<boolean> {
   if (isDemoMode || !supabase) {
     return true;
   }
@@ -533,20 +643,66 @@ export async function updateShopSettings(shopId: string, updates: Partial<ShopSu
   try {
     const { error } = await supabase
       .from('shop_settings')
-      .update({
-        shop_name: updates.shop_name,
-        bw_price: updates.bw_price,
-        color_price: updates.color_price,
-        duplex_price: updates.duplex_price,
-        is_active: updates.is_active,
-        discount_rules: updates.discount_rules
-      })
+      .update({ is_paused: isPaused })
       .eq('user_id', shopId);
 
     if (error) throw error;
     return true;
   } catch (error) {
-    console.error("adminApi: updateShopSettings failed", error);
+    console.error("adminApi: toggleShopPause failed", error);
     throw error;
   }
+}
+
+/**
+ * Permanently removes / deletes a shop from the platform.
+ */
+export async function deleteShop(shopId: string): Promise<boolean> {
+  if (isDemoMode || !supabase) {
+    return true;
+  }
+
+  try {
+    const { error } = await supabase
+      .from('shop_settings')
+      .delete()
+      .eq('user_id', shopId);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error("adminApi: deleteShop failed", error);
+    throw error;
+  }
+}
+
+/**
+ * Exports single shop's complete print audit log to a CSV file.
+ */
+export function exportShopAuditsToCSV(shop: ShopSummary, audits: PrintAuditEntry[]): void {
+  if (!shop || audits.length === 0) return;
+
+  const headers = ["Date & Time", "File Name", "Pages", "Copies", "Total Pages", "Print Mode", "Duplex", "Amount (₹)", "Status", "Printer"];
+
+  const rows = audits.map(a => [
+    `"${new Date(a.created_at).toLocaleString()}"`,
+    `"${(a.file_name || '').replace(/"/g, '""')}"`,
+    a.pages,
+    a.copies,
+    Math.max(1, a.pages || 1) * Math.max(1, a.copies || 1),
+    a.color ? "Color" : "B&W",
+    a.duplex ? "Double-Sided" : "Single-Sided",
+    a.amount,
+    a.status,
+    `"${(a.printer_name || '').replace(/"/g, '""')}"`
+  ]);
+
+  const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", `PrintBolt_${shop.shop_name.replace(/\s+/g, '_')}_Activity_${new Date().toISOString().split('T')[0]}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }

@@ -73,6 +73,8 @@ export default function ShopPrintPortalContent() {
         const data = await getShopDetails(shopParam);
         if (!data) {
           setError('Print shop not found. Please scan the QR code at the counter again.');
+        } else if (data.is_paused) {
+          setError('This print shop is currently paused by platform operations. Please contact the shop counter.');
         } else {
           setShopSettings(data);
           sessionStorage.setItem('current_shop_id', data.user_id);
