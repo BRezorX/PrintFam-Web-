@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { 
   Building2, 
   Printer, 
@@ -39,7 +39,9 @@ import {
   WifiOff,
   AlertTriangle,
   History,
-  Filter
+  Filter,
+  ArrowUpRight,
+  FileSpreadsheet
 } from 'lucide-react';
 import { 
   checkAdminStatus, 
@@ -68,7 +70,9 @@ type AdminTabMode = 'shops' | 'history';
 
 export default function AdminDashboardContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const resetModeParam = searchParams.get('mode') === 'reset';
+  const urlShopId = searchParams.get('shopId');
 
   // Authentication State
   const [authChecking, setAuthChecking] = useState(true);
@@ -93,7 +97,6 @@ export default function AdminDashboardContent() {
   const [globalAudits, setGlobalAudits] = useState<GlobalPrintAuditEntry[]>([]);
   const [metrics, setMetrics] = useState<PlatformMetrics | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loadingHistory, setLoadingHistory] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'online' | 'offline' | 'paused'>('all');
   const [timeframe, setTimeframe] = useState<TimeframeMode>('monthly');
@@ -103,10 +106,14 @@ export default function AdminDashboardContent() {
   const [historyShopFilter, setHistoryShopFilter] = useState<string>('all');
   const [historyColorFilter, setHistoryColorFilter] = useState<'all' | 'color' | 'bw'>('all');
 
-  // Modal / Drawer State
+  // Single Shop Dedicated Full-Page View State
   const [selectedShop, setSelectedShop] = useState<ShopSummary | null>(null);
   const [shopAudits, setShopAudits] = useState<PrintAuditEntry[]>([]);
   const [loadingAudits, setLoadingAudits] = useState(false);
+  const [shopAuditSearch, setShopAuditSearch] = useState('');
+  const [shopAuditColorFilter, setShopAuditColorFilter] = useState<'all' | 'color' | 'bw'>('all');
+
+  // Actions
   const [actionLoading, setActionLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -153,6 +160,19 @@ export default function AdminDashboardContent() {
       setShops(res.shops);
       setMetrics(res.metrics);
 
+      // Check if URL specifies a shop to open
+      if (urlShopId) {
+        const target = res.shops.find(s => s.user_id === urlShopId);
+        if (target) {
+          handleSelectShop(target);
+        }
+      } else if (selectedShop) {
+        const refreshedTarget = res.shops.find(s => s.user_id === selectedShop.user_id);
+        if (refreshedTarget) {
+          setSelectedShop(refreshedTarget);
+        }
+      }
+
       // Also load platform-wide print history
       const audits = await getAllPlatformPrintAudits(res.shops);
       setGlobalAudits(audits);
@@ -167,7 +187,7 @@ export default function AdminDashboardContent() {
     if (currentAdminUser) {
       loadData();
     }
-  }, [currentAdminUser]);
+  }, [currentAdminUser, urlShopId]);
 
   // 1. Handle Initial Admin Registration
   const handleRegisterInitial = async (e: React.FormEvent) => {
@@ -320,6 +340,20 @@ export default function AdminDashboardContent() {
     }
   };
 
+  // 8. Open Dedicated Full-Page View for a Shop
+  const handleSelectShop = async (shop: ShopSummary) => {
+    setSelectedShop(shop);
+    setLoadingAudits(true);
+    try {
+      const logs = await getShopAuditLogs(shop.user_id);
+      setShopAudits(logs);
+    } catch (err) {
+      console.error("Failed to load shop audits", err);
+    } finally {
+      setLoadingAudits(false);
+    }
+  };
+
   // Filtered shops list
   const filteredShops = useMemo(() => {
     return shops.filter(shop => {
@@ -366,19 +400,24 @@ export default function AdminDashboardContent() {
     });
   }, [globalAudits, historySearchQuery, historyShopFilter, historyColorFilter]);
 
-  // Load audit logs when a shop is selected
-  const handleSelectShop = async (shop: ShopSummary) => {
-    setSelectedShop(shop);
-    setLoadingAudits(true);
-    try {
-      const logs = await getShopAuditLogs(shop.user_id);
-      setShopAudits(logs);
-    } catch (err) {
-      console.error("Failed to load shop audits", err);
-    } finally {
-      setLoadingAudits(false);
-    }
-  };
+  // Filtered Individual Shop Print Audits
+  const filteredShopAudits = useMemo(() => {
+    return shopAudits.filter(item => {
+      const q = shopAuditSearch.toLowerCase().trim();
+      const matchesSearch = 
+        !q ||
+        item.file_name.toLowerCase().includes(q) ||
+        (item.printer_name && item.printer_name.toLowerCase().includes(q)) ||
+        item.status.toLowerCase().includes(q);
+
+      const matchesColor = 
+        shopAuditColorFilter === 'all' ||
+        (shopAuditColorFilter === 'color' && item.color) ||
+        (shopAuditColorFilter === 'bw' && !item.color);
+
+      return matchesSearch && matchesColor;
+    });
+  }, [shopAudits, shopAuditSearch, shopAuditColorFilter]);
 
   // Copy helper
   const handleCopy = (text: string, id: string, e?: React.MouseEvent) => {
@@ -753,7 +792,400 @@ export default function AdminDashboardContent() {
   }
 
   // ==========================================
-  // 2. MAIN SUPER-ADMIN MANAGEMENT DASHBOARD
+  // 2. DEDICATED FULL-PAGE SHOP AUDIT PREVIEW
+  // ==========================================
+  if (selectedShop) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 selection:bg-blue-600 selection:text-white pb-24">
+        {/* Top Detail Bar */}
+        <header className="sticky top-0 z-30 bg-slate-900/90 backdrop-blur-md border-b border-slate-800">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex justify-between items-center">
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setSelectedShop(null)}
+                className="flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-xl text-xs font-bold transition border border-slate-700"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>Back to Partner Shops</span>
+              </button>
+
+              <div className="h-5 w-px bg-slate-800 hidden sm:block"></div>
+
+              <div className="hidden sm:flex items-center space-x-2">
+                <span className="font-extrabold text-sm text-white">{selectedShop.shop_name}</span>
+                {selectedShop.is_online ? (
+                  <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>PC App Online</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-400">
+                    <span>PC App Closed</span>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={(e) => handleTogglePause(selectedShop, e)}
+                disabled={actionLoading}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 ${
+                  selectedShop.is_paused
+                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20'
+                    : 'bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-600/20'
+                }`}
+              >
+                {selectedShop.is_paused ? <PlayCircle className="w-4 h-4" /> : <PauseCircle className="w-4 h-4" />}
+                <span>{selectedShop.is_paused ? 'Resume Counter Service' : 'Pause Counter Service'}</span>
+              </button>
+
+              <button
+                onClick={() => exportShopAuditsToCSV(selectedShop, shopAudits)}
+                disabled={shopAudits.length === 0}
+                className="hidden sm:flex items-center space-x-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 px-3.5 py-1.5 rounded-xl text-xs font-bold transition border border-slate-700"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Export Audit CSV</span>
+              </button>
+
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="p-2 text-slate-400 hover:text-red-400 rounded-xl hover:bg-slate-800 transition"
+                title="Remove Shop from Platform"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-8">
+          {/* Shop Header Banner Card */}
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+              <div className="flex items-center space-x-4">
+                <div className="w-16 h-16 rounded-3xl bg-blue-600/20 text-blue-400 flex items-center justify-center font-black text-2xl border border-blue-500/30">
+                  {selectedShop.shop_name.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">{selectedShop.shop_name}</h1>
+                    {selectedShop.is_paused ? (
+                      <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-extrabold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                        <PauseCircle className="w-3.5 h-3.5" />
+                        <span>Service Paused</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-extrabold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Service Active</span>
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-slate-400 flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
+                    <span className="text-slate-300 font-bold">{selectedShop.email || selectedShop.owner_name || 'No email configured'}</span>
+                    <span className="text-slate-600">•</span>
+                    <span className="font-mono text-[11px] text-slate-500">Shop ID: {selectedShop.user_id}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Customer Counter URL Action Box */}
+              <div className="w-full lg:w-auto bg-slate-950 border border-slate-800 p-3 rounded-2xl flex flex-col sm:flex-row items-center gap-3">
+                <div className="w-full sm:w-80">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Customer Counter Portal URL</span>
+                  <input
+                    type="text"
+                    readOnly
+                    value={`https://printbolt.store/p?shopId=${selectedShop.user_id}`}
+                    className="w-full bg-slate-900 border border-slate-800 text-xs text-slate-300 px-3 py-1.5 rounded-xl font-mono focus:outline-none select-all"
+                  />
+                </div>
+                <div className="flex items-center space-x-2 w-full sm:w-auto pt-3 sm:pt-0">
+                  <button
+                    onClick={(e) => handleCopy(`https://printbolt.store/p?shopId=${selectedShop.user_id}`, 'full_page_copy', e)}
+                    className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition shadow-md shadow-blue-600/20"
+                  >
+                    {copiedId === 'full_page_copy' ? 'Copied!' : 'Copy Link'}
+                  </button>
+                  <Link
+                    href={`/p?shopId=${selectedShop.user_id}`}
+                    target="_blank"
+                    className="p-2 text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl transition"
+                    title="Launch Counter Kiosk"
+                  >
+                    <ArrowUpRight className="w-4 h-4" />
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Shop Analytics KPI Row */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm">
+              <div className="flex justify-between items-start mb-2">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">All-Time Volume</span>
+                <div className="p-2.5 bg-blue-500/10 text-blue-400 rounded-2xl">
+                  <Printer className="w-5 h-5" />
+                </div>
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                {selectedShop.total_pages} <span className="text-sm font-semibold text-slate-500">pgs</span>
+              </div>
+              <div className="text-xs text-slate-400 mt-1">
+                <span className="text-slate-300 font-bold">{selectedShop.total_bw_pages}</span> B&W • <span className="text-purple-400 font-bold">{selectedShop.total_color_pages}</span> Color
+              </div>
+            </div>
+
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm">
+              <div className="flex justify-between items-start mb-2">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">All-Time Revenue</span>
+                <div className="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-2xl">
+                  <IndianRupee className="w-5 h-5" />
+                </div>
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-emerald-400 tracking-tight">
+                ₹{selectedShop.total_revenue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <div className="text-xs text-slate-400 mt-1">
+                From <span className="text-white font-bold">{selectedShop.total_jobs}</span> completed orders
+              </div>
+            </div>
+
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm">
+              <div className="flex justify-between items-start mb-2">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Monthly Activity</span>
+                <div className="p-2.5 bg-purple-500/10 text-purple-400 rounded-2xl">
+                  <Calendar className="w-5 h-5" />
+                </div>
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                {selectedShop.monthly_pages} <span className="text-sm font-semibold text-slate-500">pgs</span>
+              </div>
+              <div className="text-xs text-purple-400 font-bold mt-1">
+                ₹{selectedShop.monthly_revenue} in last 30 days
+              </div>
+            </div>
+
+            {/* Shopkeeper Rates (View Only) */}
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm">
+              <div className="flex justify-between items-start mb-2">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Shopkeeper Rates</span>
+                <div className="p-2.5 bg-amber-500/10 text-amber-400 rounded-2xl">
+                  <Layers className="w-5 h-5" />
+                </div>
+              </div>
+              <div className="text-xs text-slate-300 font-semibold mt-1">
+                B&W: <span className="text-white font-black text-base">₹{selectedShop.bw_price}</span> / pg
+              </div>
+              <div className="text-xs text-purple-300 font-semibold mt-0.5">
+                Color: <span className="text-purple-400 font-black text-base">₹{selectedShop.color_price}</span> / pg • Duplex: ₹{selectedShop.duplex_price}
+              </div>
+            </div>
+          </div>
+
+          {/* Individual Print Activity Audit Section */}
+          <div className="space-y-4">
+            {/* Filter Bar */}
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-slate-900 p-4 rounded-3xl border border-slate-800">
+              <div className="relative w-full sm:w-80">
+                <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={shopAuditSearch}
+                  onChange={(e) => setShopAuditSearch(e.target.value)}
+                  placeholder="Search file name, printer, status..."
+                  className="w-full bg-slate-950 border border-slate-800 text-xs text-white pl-10 pr-4 py-2.5 rounded-2xl focus:outline-none focus:border-blue-500 transition placeholder:text-slate-600"
+                />
+              </div>
+
+              <div className="flex items-center space-x-2 w-full sm:w-auto">
+                <div className="flex items-center space-x-1.5 bg-slate-950 p-1 rounded-2xl border border-slate-800 text-xs">
+                  <button
+                    onClick={() => setShopAuditColorFilter('all')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                      shopAuditColorFilter === 'all' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    All Modes
+                  </button>
+                  <button
+                    onClick={() => setShopAuditColorFilter('bw')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                      shopAuditColorFilter === 'bw' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    B&W
+                  </button>
+                  <button
+                    onClick={() => setShopAuditColorFilter('color')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                      shopAuditColorFilter === 'color' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Color
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => exportShopAuditsToCSV(selectedShop, filteredShopAudits)}
+                  disabled={filteredShopAudits.length === 0}
+                  className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2.5 rounded-2xl text-xs font-bold transition shadow-lg shadow-emerald-600/20"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download Audit CSV</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Print History Table */}
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
+              <div className="px-6 py-4 border-b border-slate-800 flex justify-between items-center">
+                <div className="flex items-center space-x-2">
+                  <History className="w-4 h-4 text-blue-400" />
+                  <h3 className="font-extrabold text-sm text-white tracking-wide uppercase">Shop Printing Activity Log</h3>
+                </div>
+                <span className="text-xs text-slate-400 font-bold">{filteredShopAudits.length} recorded print jobs</span>
+              </div>
+
+              {loadingAudits ? (
+                <div className="p-16 text-center">
+                  <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+                  <span className="text-xs text-slate-400 font-bold">Loading print audit log...</span>
+                </div>
+              ) : filteredShopAudits.length === 0 ? (
+                <div className="p-16 text-center text-slate-500">
+                  <FileText className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm font-bold text-slate-400">No print jobs match your search.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-950 text-slate-400 font-bold uppercase tracking-wider border-b border-slate-800 text-[10px]">
+                      <tr>
+                        <th className="py-3.5 px-6">Date & Time</th>
+                        <th className="py-3.5 px-4">File Name</th>
+                        <th className="py-3.5 px-3 text-right">Pages Output</th>
+                        <th className="py-3.5 px-4">Print Configuration</th>
+                        <th className="py-3.5 px-4 text-right">Amount Billed</th>
+                        <th className="py-3.5 px-4">Hardware Printer</th>
+                        <th className="py-3.5 px-6 text-right">Job Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60 font-medium">
+                      {filteredShopAudits.map((item) => (
+                        <tr key={item.id} className="hover:bg-slate-800/40 transition">
+                          <td className="py-4 px-6 text-slate-400 font-mono text-[11px] whitespace-nowrap">
+                            {new Date(item.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}{' '}
+                            <span className="text-slate-500">{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </td>
+
+                          <td className="py-4 px-4 font-bold text-white">
+                            <div className="flex items-center space-x-2">
+                              <FileText className="w-4 h-4 text-slate-500 shrink-0" />
+                              <span className="truncate max-w-[240px]">{item.file_name}</span>
+                            </div>
+                          </td>
+
+                          <td className="py-4 px-3 text-right">
+                            <div className="font-black text-white text-sm">
+                              {Math.max(1, item.pages || 1) * Math.max(1, item.copies || 1)} <span className="text-[10px] text-slate-500 font-normal">pgs</span>
+                            </div>
+                            <div className="text-[10px] text-slate-500">
+                              {item.pages}p × {item.copies}c
+                            </div>
+                          </td>
+
+                          <td className="py-4 px-4">
+                            <div className="flex items-center space-x-1.5">
+                              {item.color ? (
+                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                                  Color
+                                </span>
+                              ) : (
+                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300">
+                                  B&W Grayscale
+                                </span>
+                              )}
+                              <span className="text-[10px] text-slate-500 font-semibold">
+                                {item.duplex ? 'Double-Sided' : 'Single-Sided'}
+                              </span>
+                            </div>
+                          </td>
+
+                          <td className="py-4 px-4 text-right">
+                            <span className="font-black text-emerald-400 text-sm">₹{item.amount}</span>
+                          </td>
+
+                          <td className="py-4 px-4 text-slate-400 text-[11px] truncate max-w-[160px]">
+                            {item.printer_name || 'Standard Printer'}
+                          </td>
+
+                          <td className="py-4 px-6 text-right">
+                            <span className="text-[9px] font-black uppercase text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20">
+                              {item.status || 'completed'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </main>
+
+        {/* Delete Confirmation Modal */}
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="max-w-md w-full bg-slate-900 border border-red-500/30 rounded-3xl p-6 shadow-2xl space-y-5">
+              <div className="w-12 h-12 bg-red-500/10 text-red-400 rounded-2xl flex items-center justify-center mx-auto border border-red-500/20">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+
+              <div className="text-center">
+                <h3 className="text-lg font-black text-white">Remove Partner Shop?</h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Are you sure you want to remove <strong className="text-white">{selectedShop.shop_name}</strong> from the platform?
+                </p>
+                <p className="text-[11px] text-red-400 mt-2">
+                  This will deactivate the counter QR link and remove the shop registration.
+                </p>
+              </div>
+
+              <div className="flex space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteShop(selectedShop)}
+                  disabled={actionLoading}
+                  className="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-2.5 rounded-xl text-xs transition flex justify-center items-center shadow-lg shadow-red-600/30"
+                >
+                  {actionLoading ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    'Confirm Remove'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ==========================================
+  // 3. MAIN SUPER-ADMIN OVERVIEW DASHBOARD
   // ==========================================
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 selection:bg-blue-600 selection:text-white pb-24">
@@ -910,7 +1342,7 @@ export default function AdminDashboardContent() {
                 <IndianRupee className="w-5 h-5" />
               </div>
             </div>
-            <div className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+            <div className="text-2xl sm:text-3xl font-black text-emerald-400 tracking-tight">
               ₹{activeStats.revenue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <div className="text-xs text-slate-400 mt-1">
@@ -1069,7 +1501,7 @@ export default function AdminDashboardContent() {
                         </th>
                         <th className="py-3.5 px-4 text-right">Revenue ({timeframe})</th>
                         <th className="py-3.5 px-4">Shop Rates (View Only)</th>
-                        <th className="py-3.5 px-6 text-right">Service Actions</th>
+                        <th className="py-3.5 px-6 text-right">Audit & Controls</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 font-medium">
@@ -1163,6 +1595,15 @@ export default function AdminDashboardContent() {
                             <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center justify-end space-x-1.5">
                                 <button
+                                  onClick={() => handleSelectShop(shop)}
+                                  className="px-2.5 py-1.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-500/30 rounded-xl text-xs font-bold transition flex items-center space-x-1"
+                                  title="Open Full-Page Printing Audit"
+                                >
+                                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                                  <span>View Audit</span>
+                                </button>
+
+                                <button
                                   onClick={(e) => handleTogglePause(shop, e)}
                                   disabled={actionLoading}
                                   className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1 ${
@@ -1221,7 +1662,6 @@ export default function AdminDashboardContent() {
         {/* TAB 2: GLOBAL PRINT HISTORY (ALL SHOPKEEPERS) */}
         {activeTab === 'history' && (
           <div className="space-y-6">
-            {/* Filter Bar for Global History */}
             <div className="flex flex-col lg:flex-row justify-between items-center gap-4 bg-slate-900 p-4 rounded-3xl border border-slate-800">
               <div className="relative w-full lg:w-80">
                 <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -1235,7 +1675,6 @@ export default function AdminDashboardContent() {
               </div>
 
               <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-                {/* Filter by Shop */}
                 <div className="flex items-center space-x-1.5 bg-slate-950 px-3 py-1.5 rounded-2xl border border-slate-800 text-xs">
                   <Building2 className="w-3.5 h-3.5 text-slate-500" />
                   <select
@@ -1252,7 +1691,6 @@ export default function AdminDashboardContent() {
                   </select>
                 </div>
 
-                {/* Filter by Mode */}
                 <div className="flex items-center space-x-1.5 bg-slate-950 p-1 rounded-2xl border border-slate-800 text-xs">
                   <button
                     onClick={() => setHistoryColorFilter('all')}
@@ -1290,7 +1728,6 @@ export default function AdminDashboardContent() {
               </div>
             </div>
 
-            {/* Global History Table */}
             <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
               <div className="px-6 py-4 border-b border-slate-800 flex justify-between items-center">
                 <div className="flex items-center space-x-2">
@@ -1386,260 +1823,6 @@ export default function AdminDashboardContent() {
           </div>
         )}
       </main>
-
-      {/* ========================================== */}
-      {/* 3. Shop Deep-Dive Audit & Service Drawer */}
-      {/* ========================================== */}
-      {selectedShop && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex justify-end">
-          <div className="w-full max-w-2xl bg-slate-900 border-l border-slate-800 h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-200">
-            {/* Drawer Header */}
-            <div className="p-6 border-b border-slate-800 flex justify-between items-start">
-              <div>
-                <div className="flex items-center space-x-2 mb-1">
-                  <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest block">Shop Overview & Activity</span>
-                  {selectedShop.is_online ? (
-                    <span className="text-[10px] font-extrabold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 flex items-center space-x-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                      <span>PC App Online</span>
-                    </span>
-                  ) : (
-                    <span className="text-[10px] font-extrabold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">
-                      PC App Closed
-                    </span>
-                  )}
-                </div>
-                <h3 className="text-xl font-black text-white tracking-tight">{selectedShop.shop_name}</h3>
-                <p className="text-xs text-slate-400 mt-1 font-mono">ID: {selectedShop.user_id}</p>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => handleTogglePause(selectedShop)}
-                  disabled={actionLoading}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 ${
-                    selectedShop.is_paused
-                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                      : 'bg-amber-600 hover:bg-amber-500 text-white'
-                  }`}
-                >
-                  {selectedShop.is_paused ? <PlayCircle className="w-3.5 h-3.5" /> : <PauseCircle className="w-3.5 h-3.5" />}
-                  <span>{selectedShop.is_paused ? 'Resume Service' : 'Pause Service'}</span>
-                </button>
-
-                <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="p-2 text-slate-400 hover:text-red-400 rounded-xl hover:bg-slate-800 transition"
-                  title="Remove Shop from Platform"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-
-                <button
-                  onClick={() => setSelectedShop(null)}
-                  className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Drawer Content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-              {/* Stats Overview Grid */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">Monthly Volume</span>
-                  <div className="text-xl font-black text-white mt-1">{selectedShop.monthly_pages} <span className="text-xs font-semibold text-slate-500">pgs</span></div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">{selectedShop.monthly_jobs} jobs (30d)</div>
-                </div>
-
-                <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">Monthly Revenue</span>
-                  <div className="text-xl font-black text-emerald-400 mt-1">₹{selectedShop.monthly_revenue}</div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">All-Time: ₹{selectedShop.total_revenue}</div>
-                </div>
-
-                <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">Service Status</span>
-                  <div className="text-xs font-black mt-2">
-                    {selectedShop.is_paused ? (
-                      <span className="text-amber-400 flex items-center space-x-1">
-                        <PauseCircle className="w-3.5 h-3.5" /> <span>Paused</span>
-                      </span>
-                    ) : (
-                      <span className="text-emerald-400 flex items-center space-x-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> <span>Active</span>
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Shopkeeper Rates (View Only) */}
-              <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-slate-300 uppercase tracking-wide">Shopkeeper Printing Rates</span>
-                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Set by Shopkeeper</span>
-                </div>
-                <div className="grid grid-cols-3 gap-2 pt-1 text-center">
-                  <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
-                    <span className="text-[9px] text-slate-400 font-bold uppercase block">B&W Rate</span>
-                    <span className="text-sm font-black text-white">₹{selectedShop.bw_price} / pg</span>
-                  </div>
-                  <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
-                    <span className="text-[9px] text-slate-400 font-bold uppercase block">Color Rate</span>
-                    <span className="text-sm font-black text-purple-400">₹{selectedShop.color_price} / pg</span>
-                  </div>
-                  <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
-                    <span className="text-[9px] text-slate-400 font-bold uppercase block">Duplex Extra</span>
-                    <span className="text-sm font-black text-slate-300">₹{selectedShop.duplex_price} / pg</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Counter Portal Links */}
-              <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-slate-300 uppercase tracking-wide">Customer Counter Link</span>
-                  <Link
-                    href={`/p?shopId=${selectedShop.user_id}`}
-                    target="_blank"
-                    className="text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center space-x-1"
-                  >
-                    <span>Open Portal</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </Link>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={`https://printbolt.store/p?shopId=${selectedShop.user_id}`}
-                    className="flex-1 bg-slate-900 border border-slate-800 text-xs text-slate-300 px-3 py-2 rounded-xl font-mono focus:outline-none"
-                  />
-                  <button
-                    onClick={(e) => handleCopy(`https://printbolt.store/p?shopId=${selectedShop.user_id}`, 'drawer_copy', e)}
-                    className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-xl text-xs font-bold transition"
-                  >
-                    {copiedId === 'drawer_copy' ? 'Copied!' : 'Copy'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Recent Audit Logs & Download Activity */}
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wide">Print Activity Log</h4>
-                  {shopAudits.length > 0 && (
-                    <button
-                      onClick={() => exportShopAuditsToCSV(selectedShop, shopAudits)}
-                      className="text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center space-x-1 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 transition"
-                    >
-                      <Download className="w-3 h-3" />
-                      <span>Download Shop Activity (.csv)</span>
-                    </button>
-                  )}
-                </div>
-
-                {loadingAudits ? (
-                  <div className="p-8 text-center bg-slate-950 rounded-2xl border border-slate-800">
-                    <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                    <span className="text-xs text-slate-500 font-bold">Loading print activity...</span>
-                  </div>
-                ) : shopAudits.length === 0 ? (
-                  <div className="p-8 text-center bg-slate-950 rounded-2xl border border-slate-800 text-slate-500 text-xs">
-                    No print activity recorded for this shop yet.
-                  </div>
-                ) : (
-                  <div className="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden max-h-80 overflow-y-auto custom-scrollbar">
-                    <table className="w-full text-left text-[11px]">
-                      <thead className="bg-slate-900 text-slate-400 font-bold uppercase tracking-wider text-[9px] sticky top-0">
-                        <tr>
-                          <th className="py-2.5 px-3">Date & Time</th>
-                          <th className="py-2.5 px-3">File Name</th>
-                          <th className="py-2.5 px-2">Specs</th>
-                          <th className="py-2.5 px-3 text-right">Amount</th>
-                          <th className="py-2.5 px-3 text-right">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-800/60 font-medium text-slate-300">
-                        {shopAudits.map((a) => (
-                          <tr key={a.id} className="hover:bg-slate-900/50">
-                            <td className="py-2.5 px-3 text-slate-400 font-mono text-[10px]">
-                              {new Date(a.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}{' '}
-                              {new Date(a.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </td>
-                            <td className="py-2.5 px-3 font-semibold text-white truncate max-w-[140px]">
-                              {a.file_name}
-                            </td>
-                            <td className="py-2.5 px-2 text-[10px]">
-                              {a.color ? <span className="text-purple-400 font-bold">Color</span> : 'B&W'} • {a.pages}p × {a.copies}c
-                            </td>
-                            <td className="py-2.5 px-3 text-right font-bold text-emerald-400">
-                              ₹{a.amount}
-                            </td>
-                            <td className="py-2.5 px-3 text-right">
-                              <span className="text-[9px] font-black uppercase text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                                {a.status}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================== */}
-      {/* 4. Delete Shop Confirmation Modal */}
-      {/* ========================================== */}
-      {showDeleteConfirm && selectedShop && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="max-w-md w-full bg-slate-900 border border-red-500/30 rounded-3xl p-6 shadow-2xl space-y-5">
-            <div className="w-12 h-12 bg-red-500/10 text-red-400 rounded-2xl flex items-center justify-center mx-auto border border-red-500/20">
-              <AlertTriangle className="w-6 h-6" />
-            </div>
-
-            <div className="text-center">
-              <h3 className="text-lg font-black text-white">Remove Partner Shop?</h3>
-              <p className="text-xs text-slate-400 mt-1">
-                Are you sure you want to remove <strong className="text-white">{selectedShop.shop_name}</strong> from the platform?
-              </p>
-              <p className="text-[11px] text-red-400 mt-2">
-                This will deactivate the counter QR link and remove the shop registration.
-              </p>
-            </div>
-
-            <div className="flex space-x-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs transition"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDeleteShop(selectedShop)}
-                disabled={actionLoading}
-                className="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-2.5 rounded-xl text-xs transition flex justify-center items-center shadow-lg shadow-red-600/30"
-              >
-                {actionLoading ? (
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                ) : (
-                  'Confirm Remove'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
