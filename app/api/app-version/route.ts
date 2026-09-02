@@ -4,9 +4,9 @@ export const runtime = 'edge';
 
 export async function GET() {
   return NextResponse.json({
-    version: '1.4.34',
+    version: '1.4.35',
     downloadUrl: 'https://printbolt.store/downloads/PrintShopAgent.exe',
-    releaseNotes: 'PrintBolt Agent v1.4.34 - Update favicon, apple-touch-icon, and tab metadata to use the authentic PrintBolt logo icon.',
+    releaseNotes: 'PrintBolt Agent v1.4.35 - Super-Admin Management Portal (/admin): Live platform analytics, partner shop directory, print volume breakdowns, per-shop audit logs, pricing management, and CSV export.',
     mandatory: false,
   });
 }
