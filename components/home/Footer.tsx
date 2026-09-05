@@ -57,10 +57,12 @@ export const Footer: React.FC = () => {
           
           {/* Brand Info */}
           <div className="md:col-span-5 space-y-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-cyan-400 flex items-center justify-center text-white shadow-md">
-                <Zap className="w-4 h-4 fill-white text-white" />
-              </div>
+            <div className="flex items-center gap-2.5">
+              <img 
+                src="/logo.png" 
+                alt="PrintBolt" 
+                className="w-8 h-8 rounded-lg object-contain shadow-md shadow-blue-500/20" 
+              />
               <span className="text-xl font-extrabold tracking-tight text-white">
                 Print<span className="text-blue-400">Bolt</span>
               </span>

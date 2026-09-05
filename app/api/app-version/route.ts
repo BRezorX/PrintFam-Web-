@@ -4,9 +4,9 @@ export const runtime = 'edge';
 
 export async function GET() {
   return NextResponse.json({
-    version: '1.4.43',
+    version: '1.4.44',
     downloadUrl: 'https://printbolt.store/downloads/PrintShopAgent.exe',
-    releaseNotes: 'PrintBolt Agent v1.4.43 - Revamped Home Page: Integrated modern full-suite PrintBoltHome landing experience with 3D device illustrations, interactive before/after comparison slider, live PC desktop app dashboard showcase, customer print simulator modal, ambient RGB lightning, and ROI calculator.',
+    releaseNotes: 'PrintBolt Agent v1.4.44 - Brand Asset Update: Updated Navbar, Footer, and Dashboard Showcase brand logos to use the official PrintBolt favicon / logo asset.',
     mandatory: false,
   });
 }

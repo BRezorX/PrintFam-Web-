@@ -244,9 +244,11 @@ export const DashboardShowcase: React.FC<DashboardShowcaseProps> = ({ onOpenCust
               <div>
                 {/* Brand in Sidebar */}
                 <div className="flex items-center gap-2 mb-6 px-2">
-                  <div className="w-6 h-6 rounded-md bg-blue-600 flex items-center justify-center text-white text-xs font-black">
-                    ⚡
-                  </div>
+                  <img 
+                    src="/logo.png" 
+                    alt="PrintBolt" 
+                    className="w-6 h-6 rounded-md object-contain" 
+                  />
                   <span className="font-bold text-sm tracking-tight">PrintBolt</span>
                 </div>
 

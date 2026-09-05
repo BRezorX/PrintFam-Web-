@@ -40,11 +40,13 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenDemo }) => {
           {/* Brand Logo */}
           <a
             href="#"
-            className="flex items-center gap-2 group cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-400 rounded-full pr-2"
+            className="flex items-center gap-2.5 group cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-400 rounded-full pr-2"
           >
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-cyan-400 flex items-center justify-center text-white shadow-md shadow-blue-500/30 group-hover:scale-105 transition-transform">
-              <Zap className="w-4 h-4 fill-white text-white" />
-            </div>
+            <img 
+              src="/logo.png" 
+              alt="PrintBolt" 
+              className="w-8 h-8 rounded-lg object-contain shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform" 
+            />
             <span className="text-lg sm:text-xl font-extrabold tracking-tight text-white flex items-center">
               Print<span className="text-blue-400">Bolt</span>
             </span>
