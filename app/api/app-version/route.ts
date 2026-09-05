@@ -4,9 +4,9 @@ export const runtime = 'edge';
 
 export async function GET() {
   return NextResponse.json({
-    version: '1.4.48',
+    version: '1.4.49',
     downloadUrl: 'https://printbolt.store/downloads/PrintShopAgent.exe',
-    releaseNotes: 'PrintBolt Agent v1.4.48 - Renamed Customers page to Printing Audit, fixed missing Amount column data binding, formatted Color, Duplex, Date & Time, and added styled status badges.',
+    releaseNotes: 'PrintBolt Agent v1.4.49 - Streamlined sidebar navigation, removed Approved tab, changed completed badge to Printed, and added Delete & Clear records controls for Dashboard while preserving permanent Printing Audit.',
     mandatory: false,
   }, {
     headers: {
