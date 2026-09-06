@@ -26,6 +26,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenDemo }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
   const isSoftwarePage = pathname?.startsWith('/software');
+  const isPrivacyPage = pathname?.startsWith('/privacy');
+  const isTermsPage = pathname?.startsWith('/terms');
+  const isLegalPage = isPrivacyPage || isTermsPage;
 
   useEffect(() => {
     const handleScroll = () => {
@@ -52,7 +55,19 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenDemo }) => {
     { label: 'Compatibility', href: '#specs' },
   ];
 
-  const currentNavLinks = isSoftwarePage ? softwareNavLinks : homeNavLinks;
+  // Legal pages navigation (Terms & Privacy)
+  const legalNavLinks = [
+    { label: '← Home', href: '/' },
+    { label: 'Terms & Conditions', href: '/terms', isHighlighted: isTermsPage },
+    { label: 'Privacy Policy', href: '/privacy', isHighlighted: isPrivacyPage },
+    { label: 'Software & Demo', href: '/software' },
+  ];
+
+  const currentNavLinks = isSoftwarePage 
+    ? softwareNavLinks 
+    : isLegalPage 
+      ? legalNavLinks 
+      : homeNavLinks;
 
   return (
     <header className="fixed top-4 left-0 right-0 z-50 transition-all duration-300 px-4 sm:px-6 lg:px-8">
@@ -190,6 +205,49 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenDemo }) => {
                       <Laptop className="w-4 h-4 text-slate-300" />
                       <span>Hardware Compatibility</span>
                     </div>
+                    <ArrowRight className="w-4 h-4 text-slate-400" />
+                  </Link>
+                </>
+              ) : isLegalPage ? (
+                /* Legal Pages (Terms / Privacy) Mobile Navigation */
+                <>
+                  <Link
+                    href="/"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="px-4 py-3 rounded-xl text-base font-semibold text-slate-100 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-2"
+                  >
+                    <ArrowLeft className="w-4 h-4 text-blue-400" />
+                    <span>Back to Home</span>
+                  </Link>
+
+                  <Link
+                    href="/terms"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`px-4 py-3 rounded-xl text-base font-semibold transition-colors flex items-center justify-between ${
+                      isTermsPage ? 'text-white bg-blue-600/20 border border-blue-500/40 font-bold' : 'text-slate-100 hover:text-white hover:bg-white/10'
+                    }`}
+                  >
+                    <span>Terms & Conditions</span>
+                    <ArrowRight className="w-4 h-4 text-slate-400" />
+                  </Link>
+
+                  <Link
+                    href="/privacy"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`px-4 py-3 rounded-xl text-base font-semibold transition-colors flex items-center justify-between ${
+                      isPrivacyPage ? 'text-white bg-blue-600/20 border border-blue-500/40 font-bold' : 'text-slate-100 hover:text-white hover:bg-white/10'
+                    }`}
+                  >
+                    <span>Privacy Policy</span>
+                    <ArrowRight className="w-4 h-4 text-slate-400" />
+                  </Link>
+
+                  <Link
+                    href="/software"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="px-4 py-3 rounded-xl text-base font-semibold text-slate-100 hover:text-white hover:bg-white/10 transition-colors flex items-center justify-between"
+                  >
+                    <span>Software & Demo</span>
                     <ArrowRight className="w-4 h-4 text-slate-400" />
                   </Link>
                 </>

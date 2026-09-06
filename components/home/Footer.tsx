@@ -1,5 +1,6 @@
 'use client';
 import React from 'react';
+import Link from 'next/link';
 import { Phone, Zap, Shield, Mail, MapPin, Heart, ArrowUp } from 'lucide-react';
 
 export const Footer: React.FC = () => {
@@ -88,13 +89,14 @@ export const Footer: React.FC = () => {
               Navigation
             </div>
             <ul className="space-y-2 text-xs text-slate-400">
-              <li><a href="/" className="hover:text-white transition-colors">Home</a></li>
-              <li><a href="/software" className="hover:text-blue-400 text-blue-300 font-semibold transition-colors flex items-center gap-1"><span>⚡ Software & Demo</span></a></li>
-              <li><a href="/software#setup" className="hover:text-white transition-colors">45-Min Setup Process</a></li>
-              <li><a href="/software#roi" className="hover:text-white transition-colors">ROI & Profit Estimator</a></li>
-              <li><a href="/#benefits" className="hover:text-white transition-colors">Benefits</a></li>
-              <li><a href="/#for-shops" className="hover:text-white transition-colors">For Print Shops</a></li>
-              <li><a href="/#faq" className="hover:text-white transition-colors">FAQ</a></li>
+              <li><Link href="/" className="hover:text-white transition-colors">Home</Link></li>
+              <li><Link href="/software" className="hover:text-blue-400 text-blue-300 font-semibold transition-colors flex items-center gap-1"><span>⚡ Software & Demo</span></Link></li>
+              <li><Link href="/software#setup" className="hover:text-white transition-colors">45-Min Setup Process</Link></li>
+              <li><Link href="/software#roi" className="hover:text-white transition-colors">ROI & Profit Estimator</Link></li>
+              <li><Link href="/#benefits" className="hover:text-white transition-colors">Benefits</Link></li>
+              <li><Link href="/#for-shops" className="hover:text-white transition-colors">For Print Shops</Link></li>
+              <li><Link href="/terms" className="hover:text-white transition-colors">Terms & Conditions</Link></li>
+              <li><Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
             </ul>
           </div>
 
@@ -132,10 +134,14 @@ export const Footer: React.FC = () => {
 
         </div>
 
-        {/* 3. Bottom Copyright & Scroll-to-top */}
+        {/* 3. Bottom Copyright & Legal Links & Scroll-to-top */}
         <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
-          <div>
-            © {new Date().getFullYear()} PrintBolt Technologies. All rights reserved.
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span>© {new Date().getFullYear()} PrintBolt Technologies. All rights reserved.</span>
+            <span className="hidden sm:inline">•</span>
+            <Link href="/terms" className="hover:text-slate-300 transition-colors">Terms & Conditions</Link>
+            <span>•</span>
+            <Link href="/privacy" className="hover:text-slate-300 transition-colors">Privacy Policy</Link>
           </div>
 
           <div className="flex items-center gap-4">

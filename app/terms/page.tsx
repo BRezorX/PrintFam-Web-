@@ -1,140 +1,417 @@
-﻿import type { Metadata } from "next";
-import Link from "next/link";
-import Image from "next/image";
+import type { Metadata } from 'next';
+import Link from 'next/link';
+import { 
+  FileText, 
+  ShieldAlert, 
+  CreditCard, 
+  RefreshCw, 
+  Printer, 
+  Laptop, 
+  Scale, 
+  CheckCircle2, 
+  AlertTriangle, 
+  Phone, 
+  Mail, 
+  ArrowLeft, 
+  Clock,
+  ExternalLink,
+  HelpCircle,
+  Truck
+} from 'lucide-react';
+import { Navbar } from '../../components/home/Navbar';
+import { Footer } from '../../components/home/Footer';
+import { AmbientLightning } from '../../components/home/AmbientLightning';
 
 export const metadata: Metadata = {
-  title: "Terms of Service — PrintBolt",
-  description: "Terms governing the use of PrintBolt for print shop owners and their customers.",
+  title: 'Terms and Conditions — PrintBolt',
+  description: 'Terms and Conditions governing the use of PrintBolt software, customer print portals, payment processing, and counter fulfillment.',
 };
 
-const UPDATED = "28 August 2026";
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section style={{ marginBottom: 48 }}>
-      <h2 style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 700, color: "var(--pb-ink)", letterSpacing: "-0.01em", marginBottom: 16, paddingBottom: 12, borderBottom: "1px solid var(--pb-border)" }}>{title}</h2>
-      <div style={{ fontFamily: "var(--font-body)", fontSize: 15, lineHeight: 1.75, color: "var(--pb-ink-mid)" }}>{children}</div>
-    </section>
-  );
-}
-
-function Li({ children }: { children: React.ReactNode }) {
-  return <li style={{ marginBottom: 8 }}>{children}</li>;
-}
-
 export default function TermsPage() {
+  const lastUpdated = 'September 2026';
+
+  const highlights = [
+    {
+      icon: Laptop,
+      title: 'Commercial Agent Licensing',
+      desc: 'Print shop owners receive a non-exclusive license to operate the PrintBolt desktop agent on counter PCs.',
+      badgeColor: 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+    },
+    {
+      icon: Printer,
+      title: 'On-Counter Fulfillment',
+      desc: 'All print jobs are fulfilled on-premises at the shop counter where the customer submitted their documents.',
+      badgeColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+    },
+    {
+      icon: CreditCard,
+      title: 'Transparent UPI & Payments',
+      desc: 'Prices are calculated transparently based on shopkeeper rate settings and processed securely via Razorpay.',
+      badgeColor: 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+    },
+    {
+      icon: RefreshCw,
+      title: 'Fair Refund & Reprint Terms',
+      desc: 'In case of printer paper jams, toner defects, or power cuts, shopkeepers provide an instant reprint or refund.',
+      badgeColor: 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+    }
+  ];
+
   return (
-    <div style={{ background: "var(--pb-paper)", minHeight: "100vh" }}>
-      <header style={{ borderBottom: "1px solid var(--pb-border)", padding: "0 24px" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", height: 64, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
-            <Image src="/logo.jpg" alt="PrintBolt" width={30} height={30} style={{ borderRadius: 7, objectFit: "contain" }} />
-            <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18, color: "var(--pb-ink)", letterSpacing: "-0.02em" }}>PrintBolt</span>
-          </Link>
-          <Link href="/" style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 500, color: "var(--pb-ink-mid)", textDecoration: "none" }}>
-            &larr; Back to Home
-          </Link>
+    <div className="min-h-screen bg-[#F3F6FC] text-[#0A1128] font-['Plus_Jakarta_Sans',sans-serif] selection:bg-blue-600 selection:text-white flex flex-col justify-between relative overflow-x-hidden">
+      
+      {/* Subtle Ambient Lightning Layer */}
+      <AmbientLightning />
+
+      {/* Top Floating Navbar */}
+      <Navbar />
+
+      {/* Main Content */}
+      <main className="flex-grow pt-28 sm:pt-36 pb-20">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          
+          {/* Breadcrumb */}
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 mb-6">
+            <Link href="/" className="hover:text-blue-600 transition-colors flex items-center gap-1">
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Home</span>
+            </Link>
+            <span>/</span>
+            <span className="text-slate-700">Legal</span>
+            <span>/</span>
+            <span className="text-blue-600">Terms and Conditions</span>
+          </div>
+
+          {/* Hero Banner Header */}
+          <div className="p-8 sm:p-10 rounded-3xl bg-gradient-to-r from-[#0A1128] via-[#0F172A] to-[#1E293B] text-white border border-slate-800 shadow-2xl relative overflow-hidden mb-12">
+            <div className="absolute -top-16 -right-16 w-80 h-80 bg-blue-600/20 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-16 -left-16 w-80 h-80 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="relative z-10 space-y-4">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs font-bold uppercase tracking-wider border border-blue-400/30">
+                <Scale className="w-3.5 h-3.5 text-blue-400" />
+                <span>Legal Agreement</span>
+              </div>
+
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight">
+                Terms and Conditions
+              </h1>
+
+              <p className="text-slate-300 text-sm sm:text-base max-w-2xl leading-relaxed">
+                Please review these Terms and Conditions carefully before installing the PrintBolt desktop agent or submitting documents through our customer print portals.
+              </p>
+
+              <div className="pt-2 flex items-center gap-2 text-xs font-medium text-slate-400">
+                <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Last Updated: {lastUpdated}</span>
+                <span>•</span>
+                <span>Version 1.4</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 4 Trust Highlights Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-12">
+            {highlights.map((item, idx) => {
+              const Icon = item.icon;
+              return (
+                <div 
+                  key={idx} 
+                  className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow flex items-start gap-3.5"
+                >
+                  <div className={`p-2.5 rounded-xl border shrink-0 ${item.badgeColor}`}>
+                    <Icon className="w-5 h-5" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-bold text-[#0A1128]">{item.title}</h3>
+                    <p className="text-xs text-slate-600 leading-relaxed">{item.desc}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Legal Document Content Body */}
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-md p-6 sm:p-10 space-y-10 text-slate-700 leading-relaxed text-sm sm:text-base">
+            
+            {/* Section 1 */}
+            <section className="space-y-3 pb-8 border-b border-slate-100">
+              <h2 className="text-xl sm:text-2xl font-black text-[#0A1128] tracking-tight flex items-center gap-2.5">
+                <span className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 font-bold text-xs flex items-center justify-center border border-blue-200">1</span>
+                <span>Agreement to Terms & Definitions</span>
+              </h2>
+              <p>
+                These Terms and Conditions (&quot;Terms&quot;) constitute a legally binding agreement between you—whether individually or as a commercial representative of a print establishment—and <strong>PrintBolt Technologies</strong> (&quot;PrintBolt&quot;, &quot;we&quot;, &quot;us&quot;, or &quot;our&quot;).
+              </p>
+              <p>
+                By downloading, installing, or executing the <strong>PrintBolt desktop agent</strong>, creating a shopkeeper profile, scanning a PrintBolt shop QR code, or submitting print orders at <strong>printbolt.store</strong>, you acknowledge that you have read, understood, and agreed to be bound by all of these Terms. If you do not agree, you must immediately discontinue use of the platform and software.
+              </p>
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/70 text-xs sm:text-sm space-y-1 text-slate-600">
+                <p><strong>Key Definitions:</strong></p>
+                <ul className="list-disc list-inside space-y-1 pl-1">
+                  <li><strong>Shopkeeper / Merchant:</strong> The commercial print shop owner or operator who installs and runs PrintBolt software on their premises.</li>
+                  <li><strong>Customer / End-User:</strong> Any individual who scans a counter QR code or accesses a shop URL to upload documents for printing.</li>
+                  <li><strong>Platform:</strong> The combined ecosystem consisting of the PrintBolt Windows desktop agent, the customer web portal, and cloud queue synchronization APIs.</li>
+                </ul>
+              </div>
+            </section>
+
+            {/* Section 2 */}
+            <section className="space-y-3 pb-8 border-b border-slate-100">
+              <h2 className="text-xl sm:text-2xl font-black text-[#0A1128] tracking-tight flex items-center gap-2.5">
+                <span className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 font-bold text-xs flex items-center justify-center border border-blue-200">2</span>
+                <span>Description of Platform & Services</span>
+              </h2>
+              <p>
+                PrintBolt is a software platform engineered to modernize everyday Indian photocopy, cyber-café, and digital print shops. Key capabilities include:
+              </p>
+              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs sm:text-sm pt-1">
+                <li className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200/60">
+                  <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span>Contactless customer document upload</span>
+                </li>
+                <li className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200/60">
+                  <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span>Real-time price calculation per page</span>
+                </li>
+                <li className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200/60">
+                  <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span>Automated desktop printer spooling</span>
+                </li>
+                <li className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200/60">
+                  <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span>Integrated digital audit records</span>
+                </li>
+              </ul>
+              <p className="text-xs text-slate-500 pt-1">
+                PrintBolt acts solely as a technology service provider facilitating workflow automation between Customers and Shopkeepers. PrintBolt does not own or operate physical printing equipment.
+              </p>
+            </section>
+
+            {/* Section 3 */}
+            <section className="space-y-3 pb-8 border-b border-slate-100">
+              <h2 className="text-xl sm:text-2xl font-black text-[#0A1128] tracking-tight flex items-center gap-2.5">
+                <span className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 font-bold text-xs flex items-center justify-center border border-blue-200">3</span>
+                <span>Shopkeeper Obligations & Operational Standards</span>
+              </h2>
+              <p>Print shop owners utilizing PrintBolt agree to uphold the following standards:</p>
+              <ul className="list-disc list-inside space-y-1.5 text-xs sm:text-sm pl-1">
+                <li><strong>Hardware Maintenance:</strong> Ensure that counter computers, operating systems, and connected printers maintain sufficient paper stock, toner, and functional network drivers.</li>
+                <li><strong>Transparent Pricing:</strong> Accurately configure per-page rates (B/W, Colour, Duplex) in the desktop agent so customers see truthful prices before payment.</li>
+                <li><strong>Order Fulfillment:</strong> Timely print and release customer jobs once verified on the counter screen.</li>
+                <li><strong>Legal Compliance:</strong> Refrain from using PrintBolt to print prohibited, forged, or unlawful documents under Indian jurisdiction.</li>
+              </ul>
+            </section>
+
+            {/* Section 4 - Acceptable Use & Prohibited Documents */}
+            <section className="space-y-4 pb-8 border-b border-slate-100">
+              <h2 className="text-xl sm:text-2xl font-black text-[#0A1128] tracking-tight flex items-center gap-2.5">
+                <span className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 font-bold text-xs flex items-center justify-center border border-blue-200">4</span>
+                <span>Customer Upload Guidelines & Prohibited Content</span>
+              </h2>
+              <p>
+                Customers uploading files warrant that they possess lawful ownership, copyright, or authorization to print the documents submitted.
+              </p>
+              
+              <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200/80 space-y-2">
+                <div className="flex items-center gap-2 text-rose-800 font-bold text-sm">
+                  <AlertTriangle className="w-4 h-4 text-rose-600" />
+                  <span>Strictly Prohibited Content</span>
+                </div>
+                <p className="text-xs sm:text-sm text-rose-900 leading-relaxed">
+                  You agree not to upload or attempt to print any of the following:
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-xs sm:text-sm text-rose-800 pl-1">
+                  <li>Counterfeit currency notes, forged government bonds, or fake negotiable instruments.</li>
+                  <li>Forged identity cards, fake police / military credentials, or fraudulent court seals.</li>
+                  <li>Obscene, defamatory, or unlawful materials prohibited under the Indian Penal Code.</li>
+                  <li>Copyright-infringing textbooks, books, or proprietary materials in violation of the Indian Copyright Act, 1957.</li>
+                </ul>
+                <p className="text-[11px] text-rose-700 pt-1">
+                  Shopkeepers reserve the absolute right to refuse and report any illegal or suspicious printing attempts to local authorities.
+                </p>
+              </div>
+            </section>
+
+            {/* Section 5 - Pricing & Payments */}
+            <section className="space-y-4 pb-8 border-b border-slate-100">
+              <h2 className="text-xl sm:text-2xl font-black text-[#0A1128] tracking-tight flex items-center gap-2.5">
+                <span className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 font-bold text-xs flex items-center justify-center border border-blue-200">5</span>
+                <span>Pricing, Billing & Payment Processing</span>
+              </h2>
+              <p>
+                All financial transactions on PrintBolt are executed in <strong>Indian National Rupees (INR)</strong>:
+              </p>
+              <ul className="list-disc list-inside space-y-1.5 text-xs sm:text-sm pl-1">
+                <li><strong>Dynamic Price Quotation:</strong> The web portal automatically analyzes the uploaded file (page count, selected color mode, single/double sided) and computes the exact payable total before payment is collected.</li>
+                <li><strong>Payment Gateway:</strong> Payments are processed via <strong>Razorpay</strong> through secure UPI QR, Google Pay, PhonePe, Paytm, debit/credit cards, or netbanking.</li>
+                <li><strong>Instant Verification:</strong> Upon successful payment capture, an automated confirmation token releases the document into the shopkeeper&apos;s active print spool.</li>
+              </ul>
+            </section>
+
+            {/* Section 6 - Fulfillment & Delivery Policy */}
+            <section className="space-y-4 pb-8 border-b border-slate-100">
+              <h2 className="text-xl sm:text-2xl font-black text-[#0A1128] tracking-tight flex items-center gap-2.5">
+                <span className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 font-bold text-xs flex items-center justify-center border border-blue-200">6</span>
+                <span>Fulfillment, Shipping & Counter Delivery Policy</span>
+              </h2>
+              
+              <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
+                <div className="flex items-center gap-2 text-[#0A1128] font-bold text-sm">
+                  <Truck className="w-4 h-4 text-blue-600" />
+                  <span>On-Premises Counter Delivery</span>
+                </div>
+                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                  PrintBolt operates as an <strong>on-counter print automation service</strong>:
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-xs sm:text-sm text-slate-600 pl-1">
+                  <li><strong>Delivery Mechanism:</strong> Physical prints are fulfilled at the specific print shop counter where the order was placed. There is no shipping, courier, or postal dispatch involved.</li>
+                  <li><strong>Turnaround Time:</strong> Once payment is verified, printing initiates within seconds on the shopkeeper&apos;s printer. Documents are typically ready for pickup within 1 to 5 minutes depending on job page volume.</li>
+                  <li><strong>Collection:</strong> Customers present their digital order token or name at the shop counter to collect their fresh physical prints.</li>
+                </ul>
+              </div>
+            </section>
+
+            {/* Section 7 - Cancellation & Refund Policy */}
+            <section className="space-y-4 pb-8 border-b border-slate-100">
+              <h2 className="text-xl sm:text-2xl font-black text-[#0A1128] tracking-tight flex items-center gap-2.5">
+                <span className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 font-bold text-xs flex items-center justify-center border border-blue-200">7</span>
+                <span>Cancellation & Refund Policy</span>
+              </h2>
+              <p>
+                We strive for total satisfaction on every print job. Because printing consumes physical paper and ink immediately, our cancellation policy operates as follows:
+              </p>
+
+              <div className="space-y-3 pt-1 text-xs sm:text-sm">
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/70 space-y-1">
+                  <div className="font-bold text-[#0A1128]">A. Technical Jam or Hardware Failure (Full Refund / Instant Reprint)</div>
+                  <p className="text-slate-600">
+                    If payment was captured but the print shop experiences a hardware paper jam, printer breakdown, or power outage that cannot be fulfilled within 10 minutes, the shopkeeper will provide an immediate reprint or initiate an electronic refund via Razorpay to the original source account within 3 to 5 business days.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/70 space-y-1">
+                  <div className="font-bold text-[#0A1128]">B. Quality & Print Defects</div>
+                  <p className="text-slate-600">
+                    If prints exhibit severe toner smudges, skewed alignment, or torn pages caused by printer failure, the shopkeeper will re-print the affected pages immediately at zero additional fee.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/70 space-y-1">
+                  <div className="font-bold text-[#0A1128]">C. Completed Prints (Non-Cancellable)</div>
+                  <p className="text-slate-600">
+                    Orders that have been physically printed according to the user-selected settings (e.g., customer mistakenly requested Colour instead of B/W or uploaded the wrong file) cannot be cancelled or refunded once physical consumables have been exhausted.
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            {/* Section 8 - Ephemeral File Processing */}
+            <section className="space-y-3 pb-8 border-b border-slate-100">
+              <h2 className="text-xl sm:text-2xl font-black text-[#0A1128] tracking-tight flex items-center gap-2.5">
+                <span className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 font-bold text-xs flex items-center justify-center border border-blue-200">8</span>
+                <span>Ephemeral File Processing & Retention</span>
+              </h2>
+              <p>
+                As detailed in our <Link href="/privacy" className="text-blue-600 underline font-semibold">Privacy Policy</Link>, PrintBolt enforces a strict <strong>5-minute ephemeral lifecycle</strong>. Files are stored only during transmission and spooling, and permanently erased from memory and disk within 5 minutes after print completion.
+              </p>
+              <p className="text-xs text-slate-500">
+                Customers must retain their original digital files on their personal phones or devices. PrintBolt cannot recover files after the 5-minute deletion window.
+              </p>
+            </section>
+
+            {/* Section 9 - Intellectual Property */}
+            <section className="space-y-3 pb-8 border-b border-slate-100">
+              <h2 className="text-xl sm:text-2xl font-black text-[#0A1128] tracking-tight flex items-center gap-2.5">
+                <span className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 font-bold text-xs flex items-center justify-center border border-blue-200">9</span>
+                <span>Intellectual Property</span>
+              </h2>
+              <p>
+                The PrintBolt desktop agent, web portals, user interfaces, branding, logos, and source code are the exclusive intellectual property of PrintBolt Technologies. Users receive a limited, revocable, non-transferable license to utilize the software for counter print operations.
+              </p>
+              <p>
+                Customers retain all existing copyright and intellectual property rights in their uploaded document files.
+              </p>
+            </section>
+
+            {/* Section 10 - Disclaimers & Liability */}
+            <section className="space-y-3 pb-8 border-b border-slate-100">
+              <h2 className="text-xl sm:text-2xl font-black text-[#0A1128] tracking-tight flex items-center gap-2.5">
+                <span className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 font-bold text-xs flex items-center justify-center border border-blue-200">10</span>
+                <span>Disclaimer of Warranties & Limitation of Liability</span>
+              </h2>
+              <p>
+                The PrintBolt platform is provided on an &quot;AS IS&quot; and &quot;AS AVAILABLE&quot; basis without warranties of any kind. PrintBolt Technologies shall not be liable for:
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-xs sm:text-sm pl-1">
+                <li>Local printer malfunctions, ink exhaustion, or hardware paper jams on shopkeeper premises.</li>
+                <li>Power disruptions, Internet service provider outages, or third-party bank UPI downtimes.</li>
+                <li>Misprints resulting from low-resolution or corrupted customer-submitted files.</li>
+              </ul>
+            </section>
+
+            {/* Section 11 - Governing Law */}
+            <section className="space-y-3 pb-8 border-b border-slate-100">
+              <h2 className="text-xl sm:text-2xl font-black text-[#0A1128] tracking-tight flex items-center gap-2.5">
+                <span className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 font-bold text-xs flex items-center justify-center border border-blue-200">11</span>
+                <span>Governing Law & Dispute Resolution</span>
+              </h2>
+              <p>
+                These Terms shall be governed by and construed in accordance with the laws of the Republic of India. Any legal disputes arising under these Terms shall be subject to the exclusive jurisdiction of competent courts in India.
+              </p>
+            </section>
+
+            {/* Section 12 - Contact */}
+            <section className="space-y-4 pt-2">
+              <h2 className="text-xl sm:text-2xl font-black text-[#0A1128] tracking-tight flex items-center gap-2.5">
+                <span className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 font-bold text-xs flex items-center justify-center border border-blue-200">12</span>
+                <span>Contact & Support Inquiries</span>
+              </h2>
+              <p>
+                If you have questions about these Terms and Conditions or require assistance with print orders, please contact our support desk:
+              </p>
+              
+              <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3 text-xs sm:text-sm">
+                <div className="font-bold text-[#0A1128]">PrintBolt Technologies — Support Desk</div>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 text-slate-600">
+                  <div className="flex items-center gap-2">
+                    <Phone className="w-4 h-4 text-emerald-600" />
+                    <a href="tel:+916000061991" className="hover:text-blue-600 font-mono font-semibold">+91 60000 61991</a>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-blue-600" />
+                    <a href="mailto:support@printbolt.in" className="hover:text-blue-600">support@printbolt.in</a>
+                  </div>
+                </div>
+                <div className="text-[11px] text-slate-500">
+                  Support hours: Monday to Saturday, 9:00 AM to 9:00 PM IST.
+                </div>
+              </div>
+            </section>
+
+          </div>
+
+          {/* Quick Switch to Privacy Policy */}
+          <div className="mt-8 p-6 rounded-2xl bg-white border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="text-center sm:text-left">
+              <h4 className="text-sm font-bold text-[#0A1128]">Want to know how we protect your documents?</h4>
+              <p className="text-xs text-slate-500">Read our Privacy Policy and 5-minute ephemeral storage commitment.</p>
+            </div>
+            <Link
+              href="/privacy"
+              className="px-5 py-2.5 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs sm:text-sm shadow-md shadow-blue-500/20 transition-all flex items-center gap-2 shrink-0"
+            >
+              <span>View Privacy Policy</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
         </div>
-      </header>
-
-      <main style={{ maxWidth: 760, margin: "0 auto", padding: "64px 24px 100px" }}>
-        <div style={{ marginBottom: 48 }}>
-          <p style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--pb-accent)", marginBottom: 12 }}>Legal</p>
-          <h1 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(32px, 5vw, 48px)", fontWeight: 700, letterSpacing: "-0.03em", color: "var(--pb-ink)", lineHeight: 1.1, marginBottom: 16 }}>Terms of Service</h1>
-          <p style={{ fontFamily: "var(--font-body)", fontSize: 15, color: "var(--pb-ink-soft)" }}>Last updated: {UPDATED}</p>
-        </div>
-
-        <Section title="1. Acceptance of Terms">
-          <p>By installing PrintBolt, creating a shopkeeper account, or using any part of the PrintBolt platform, you agree to be bound by these Terms of Service. If you do not agree, do not use the platform.</p>
-          <p style={{ marginTop: 12 }}>These terms apply primarily to <strong>print shop owners (shopkeepers)</strong> who use PrintBolt to manage their print operations.</p>
-        </Section>
-
-        <Section title="2. What PrintBolt Is">
-          <p>PrintBolt is a software platform that enables print shop owners to offer customers a digital, self-service print job submission experience. The platform consists of:</p>
-          <ul style={{ paddingLeft: 24, marginTop: 12 }}>
-            <Li>A desktop agent application installed on the shopkeeper&apos;s Windows PC</Li>
-            <Li>A web portal (printbolt.store) used by customers to submit print jobs</Li>
-            <Li>A cloud backend (Supabase) for data storage and authentication</Li>
-            <Li>Payment processing via Razorpay</Li>
-          </ul>
-        </Section>
-
-        <Section title="3. Shopkeeper Responsibilities">
-          <p style={{ marginBottom: 12 }}>As a shopkeeper using PrintBolt, you agree to:</p>
-          <ul style={{ paddingLeft: 24 }}>
-            <Li>Provide accurate shop information during setup</Li>
-            <Li>Set fair and legal pricing for print services</Li>
-            <Li>Ensure your PC and printer are in proper working condition</Li>
-            <Li>Review and approve print jobs before printing (PrintBolt does not auto-print without your action)</Li>
-            <Li>Comply with all applicable Indian laws regarding document printing and copyright</Li>
-            <Li>Not use PrintBolt to print illegal, unlawful, or infringing content</Li>
-            <Li>Maintain the security of your PrintBolt account credentials</Li>
-          </ul>
-        </Section>
-
-        <Section title="4. Acceptable Use">
-          <p style={{ marginBottom: 12 }}>You may not use PrintBolt to:</p>
-          <ul style={{ paddingLeft: 24 }}>
-            <Li>Print or distribute content that violates Indian copyright laws</Li>
-            <Li>Process fraudulent payments or misrepresent pricing to customers</Li>
-            <Li>Collect or misuse customer data obtained through the platform</Li>
-            <Li>Attempt to reverse-engineer, bypass, or tamper with the PrintBolt software or infrastructure</Li>
-            <Li>Resell or redistribute PrintBolt software without written authorisation</Li>
-          </ul>
-        </Section>
-
-        <Section title="5. Payments and Fees">
-          <p style={{ marginBottom: 12 }}>Payments made by customers for print jobs are processed by <strong>Razorpay</strong>. By using the payment features, you agree to Razorpay&apos;s terms of service.</p>
-          <p style={{ marginBottom: 12 }}>PrintBolt is not a payment processor and is not responsible for payment failures, disputes, or refunds beyond what is technically supported by the platform. Shopkeepers are responsible for their own refund and cancellation policies with customers.</p>
-          <p>PrintBolt may charge shopkeepers a platform fee in the future. Any such changes will be communicated in advance.</p>
-        </Section>
-
-        <Section title="6. Intellectual Property">
-          <p>The PrintBolt software, branding, design, and underlying systems are the intellectual property of PrintBolt. You are granted a limited, non-exclusive, non-transferable licence to use the software for the purpose of operating your print shop.</p>
-          <p style={{ marginTop: 12 }}>Customer-submitted print files remain the property of the respective customers. PrintBolt does not claim any rights over content submitted for printing.</p>
-        </Section>
-
-        <Section title="7. Service Availability">
-          <p>PrintBolt is provided on an &quot;as available&quot; basis. We aim to maintain high uptime but do not guarantee uninterrupted access. Scheduled maintenance or unforeseen outages may temporarily affect availability. We are not liable for losses resulting from downtime.</p>
-        </Section>
-
-        <Section title="8. Limitation of Liability">
-          <p>To the maximum extent permitted by applicable law, PrintBolt shall not be liable for:</p>
-          <ul style={{ paddingLeft: 24, marginTop: 12 }}>
-            <Li>Loss of revenue or profit due to service interruptions</Li>
-            <Li>Data loss resulting from hardware failure on the shopkeeper&apos;s premises</Li>
-            <Li>Disputes between shopkeepers and their customers</Li>
-            <Li>Misuse of the platform by the shopkeeper or their customers</Li>
-          </ul>
-        </Section>
-
-        <Section title="9. Termination">
-          <p>PrintBolt reserves the right to suspend or terminate any shopkeeper account that violates these terms, engages in fraudulent activity, or misuses the platform. Shopkeepers may delete their account at any time by contacting us.</p>
-        </Section>
-
-        <Section title="10. Governing Law">
-          <p>These Terms of Service are governed by the laws of India. Any disputes arising from the use of PrintBolt shall be subject to the jurisdiction of courts in India.</p>
-        </Section>
-
-        <Section title="11. Changes to These Terms">
-          <p>We may update these Terms of Service from time to time. Continued use of PrintBolt after changes are posted constitutes acceptance of the revised terms. Material changes will be communicated to registered shopkeepers.</p>
-        </Section>
-
-        <Section title="12. Contact">
-          <p>For questions about these terms, contact us:</p>
-          <ul style={{ paddingLeft: 24, marginTop: 12 }}>
-            <Li>WhatsApp: <a href="https://wa.me/916000061991" style={{ color: "var(--pb-accent)" }}>+91 60000 61991</a></Li>
-            <Li>Phone: <a href="tel:+916000061991" style={{ color: "var(--pb-accent)" }}>+91 60000 61991</a></Li>
-            <Li>Website: <a href="https://printbolt.store" style={{ color: "var(--pb-accent)" }}>printbolt.store</a></Li>
-          </ul>
-        </Section>
       </main>
 
-      <footer style={{ borderTop: "1px solid var(--pb-border)", padding: "28px 24px", textAlign: "center" }}>
-        <p style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--pb-ink-faint)" }}>
-          &copy; 2026 PrintBolt &mdash; <Link href="/privacy" style={{ color: "var(--pb-ink-faint)", textDecoration: "none" }}>Privacy Policy</Link>
-        </p>
-      </footer>
+      {/* Footer */}
+      <Footer />
+
     </div>
   );
 }
