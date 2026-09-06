@@ -88,13 +88,13 @@ export const Footer: React.FC = () => {
               Navigation
             </div>
             <ul className="space-y-2 text-xs text-slate-400">
-              <li><a href="#how-it-works" className="hover:text-white transition-colors">How It Works</a></li>
-              <li><a href="#benefits" className="hover:text-white transition-colors">Benefits</a></li>
-              <li><a href="#comparison" className="hover:text-white transition-colors">Before vs After</a></li>
-              <li><a href="#dashboard-demo" className="hover:text-white transition-colors">Desktop App Showcase</a></li>
-              <li><a href="#for-shops" className="hover:text-white transition-colors">For Print Shops</a></li>
-              <li><a href="#calculator" className="hover:text-white transition-colors">ROI Calculator</a></li>
-              <li><a href="#faq" className="hover:text-white transition-colors">FAQ</a></li>
+              <li><a href="/" className="hover:text-white transition-colors">Home</a></li>
+              <li><a href="/software" className="hover:text-blue-400 text-blue-300 font-semibold transition-colors flex items-center gap-1"><span>⚡ Software & Demo</span></a></li>
+              <li><a href="/software#setup" className="hover:text-white transition-colors">45-Min Setup Process</a></li>
+              <li><a href="/software#roi" className="hover:text-white transition-colors">ROI & Profit Estimator</a></li>
+              <li><a href="/#benefits" className="hover:text-white transition-colors">Benefits</a></li>
+              <li><a href="/#for-shops" className="hover:text-white transition-colors">For Print Shops</a></li>
+              <li><a href="/#faq" className="hover:text-white transition-colors">FAQ</a></li>
             </ul>
           </div>
 
