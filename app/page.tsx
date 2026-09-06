@@ -7,7 +7,6 @@ import { Navbar } from '../components/home/Navbar';
 import { HeroSection } from '../components/home/HeroSection';
 import { ComparisonSlider } from '../components/home/ComparisonSlider';
 import { BenefitsGrid } from '../components/home/BenefitsGrid';
-import { DashboardShowcase } from '../components/home/DashboardShowcase';
 import { TargetAudience } from '../components/home/TargetAudience';
 import { FaqSection } from '../components/home/FaqSection';
 import { Footer } from '../components/home/Footer';
@@ -100,10 +99,7 @@ export default function HomePage() {
         {/* 4. Benefits Feature Grid */}
         <BenefitsGrid />
 
-        {/* 5. Interactive Desktop Dashboard Application Showcase */}
-        <DashboardShowcase onOpenCustomerSimulator={() => setSimulatorOpen(true)} />
-
-        {/* 6. FOR PRINT SHOPS Target Audience Grid */}
+        {/* 5. FOR PRINT SHOPS Target Audience Grid */}
         <TargetAudience />
 
         {/* 7. Frequently Asked Questions */}
