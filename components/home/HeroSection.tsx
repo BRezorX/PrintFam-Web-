@@ -116,16 +116,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 <Phone className="w-4 h-4 fill-current" />
                 <span>WhatsApp Us (+91 60000 61991)</span>
               </a>
-
-              <button
-                type="button"
-                onClick={onOpenCustomerSimulator}
-                className="w-full sm:w-auto px-6 py-3.5 rounded-full bg-white hover:bg-slate-50 text-[#0A1128] font-semibold text-sm sm:text-base border border-slate-200/80 shadow-md shadow-slate-200/50 hover:shadow-lg hover:border-blue-300 transition-all flex items-center justify-center gap-2 cursor-pointer group"
-              >
-                <QrCode className="w-4 h-4 text-blue-600 group-hover:scale-110 transition-transform" />
-                <span>Try Customer Upload Demo</span>
-                <ArrowRight className="w-4 h-4 text-slate-400 group-hover:translate-x-1 transition-transform" />
-              </button>
             </div>
 
             {/* Reassurance Micro-Badges */}

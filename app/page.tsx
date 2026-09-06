@@ -74,22 +74,14 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                <div className="lg:col-span-4 flex flex-col sm:flex-row lg:flex-col items-center justify-center gap-3">
+                <div className="lg:col-span-4 flex items-center justify-center">
                   <Link
                     href="/software"
-                    className="w-full text-center px-7 py-4 rounded-2xl bg-blue-600 hover:bg-blue-500 active:scale-98 text-white font-extrabold text-sm sm:text-base shadow-xl shadow-blue-600/30 flex items-center justify-center gap-2.5 transition-all group cursor-pointer"
+                    className="w-full sm:w-auto lg:w-full text-center px-7 py-4 rounded-2xl bg-blue-600 hover:bg-blue-500 active:scale-98 text-white font-extrabold text-sm sm:text-base shadow-xl shadow-blue-600/30 flex items-center justify-center gap-2.5 transition-all group cursor-pointer"
                   >
                     <span>Explore Software & Demo</span>
                     <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                   </Link>
-
-                  <button
-                    type="button"
-                    onClick={() => setSimulatorOpen(true)}
-                    className="w-full text-center px-7 py-3.5 rounded-2xl bg-white/10 hover:bg-white/20 active:scale-98 text-white font-bold text-xs sm:text-sm border border-white/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
-                  >
-                    <span>⚡ Quick Upload Demo</span>
-                  </button>
                 </div>
               </div>
             </div>
